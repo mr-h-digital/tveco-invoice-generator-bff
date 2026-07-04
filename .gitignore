@@ -1,0 +1,123 @@
+# ── Maven build output ─────────────────────────────────────────────────────────
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ── Compiled class files ───────────────────────────────────────────────────────
+*.class
+
+# ── Package files ──────────────────────────────────────────────────────────────
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# ── Maven wrapper ──────────────────────────────────────────────────────────────
+.mvn/
+mvnw
+mvnw.cmd
+
+# ── Spring Boot dev tools ──────────────────────────────────────────────────────
+spring-shell.log
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*
+*.pem
+*.key
+*.cert
+*.p12
+*.jks
+*.keystore
+*.truststore
+application-local.yml
+application-local.properties
+application-secret*.yml
+application-secret*.properties
+
+# ── Claude Code & AI tooling ───────────────────────────────────────────────────
+.claude/
+.claude-flow/
+.claudeignore
+CLAUDE.md
+claude.json
+.cursorrules
+.cursorignore
+.aider*
+.continue/
+.codeium/
+.tabnine/
+.copilot/
+
+# ── IDE & editor configs ───────────────────────────────────────────────────────
+# IntelliJ IDEA / JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.vscode/launch.json
+.vscode/*.code-workspace
+
+# Eclipse
+.eclipse/
+.classpath
+.project
+.settings/
+bin/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# ── OS & system artifacts ──────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+
+# ── Misc ───────────────────────────────────────────────────────────────────────
+*.swp
+*.swo
+.#*
+\#*#
+.cache/
+.temp/
+.tmp/
+tmp/
+temp/
