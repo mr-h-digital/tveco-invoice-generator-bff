@@ -14,15 +14,15 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(ResourceNotFoundException ex) {
+    public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("message", ex.getMessage()));
+                .body(Map.of("success", false, "message", ex.getMessage()));
     }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<Map<String, String>> handleConflict(ConflictException ex) {
+    public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("message", ex.getMessage()));
+                .body(Map.of("success", false, "message", ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -34,12 +34,12 @@ public class GlobalExceptionHandler {
                         (a, b) -> a
                 ));
         return ResponseEntity.badRequest()
-                .body(Map.of("message", "Validation failed", "errors", errors));
+                .body(Map.of("success", false, "message", "Validation failed", "errors", errors));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalArg(IllegalArgumentException ex) {
+    public ResponseEntity<Map<String, Object>> handleIllegalArg(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
-                .body(Map.of("message", ex.getMessage()));
+                .body(Map.of("success", false, "message", ex.getMessage()));
     }
 }
