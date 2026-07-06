@@ -1,5 +1,5 @@
 [build]
-builder = "NIXPACKS"
+builder = "RAILPACK"
 
 [deploy]
 startCommand = "java -jar target/tveco-invoice-generator-bff-1.0.0.jar"
