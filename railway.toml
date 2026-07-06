@@ -1,6 +1,9 @@
 [build]
 builder = "NIXPACKS"
 
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["jdk21"]
+
 [deploy]
 startCommand = "java -jar target/tveco-invoice-generator-bff-1.0.0.jar"
 healthcheckPath = "/actuator/health"
