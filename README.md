@@ -256,6 +256,18 @@ Query parameters: `from` and `to` (ISO date, e.g. `2026-01-01`). Both are option
 | `DELETE` | `/api/notifications/outbox/sent` | Delete all sent outbox messages |
 | `POST` | `/api/notifications/outbox/dispatch` | Dispatch pending outbox emails to webhook |
 
+### Auth — `/api/auth`
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/login` | Validate admin credentials for UI login |
+
+### Auth — `/api/auth`
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/login` | Validate admin credentials for UI login |
+
 ### Health — `/actuator/health`
 
 Returns `{ "status": "UP" }`. Used by Railway for health checks.
