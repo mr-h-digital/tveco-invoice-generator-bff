@@ -43,7 +43,20 @@ public class ExportJobService {
     public ExportJobDto create(ExportJobCreateRequest req) {
         LocalDate issueDate = LocalDate.now();
         String year = String.valueOf(issueDate.getYear());
-        String jobNumber = String.format("TVECO-EXP-%s-%03d", year, exportJobRepository.findMaxSequenceForYear(year) + 1);
+        String prefix = "TVECO-EXP-" + year + "-";
+        int nextSequence = exportJobRepository.findByJobNumberStartingWith(prefix).stream()
+                .map(ExportJob::getJobNumber)
+                .map(number -> number.substring(prefix.length()))
+                .mapToInt(sequence -> {
+                    try {
+                        return Integer.parseInt(sequence);
+                    } catch (NumberFormatException ex) {
+                        return 0;
+                    }
+                })
+                .max()
+                .orElse(0) + 1;
+        String jobNumber = String.format("%s%03d", prefix, nextSequence);
         String token = "TVC-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
 
         BigDecimal projectValue = req.projectValue().setScale(2, RoundingMode.HALF_UP);
