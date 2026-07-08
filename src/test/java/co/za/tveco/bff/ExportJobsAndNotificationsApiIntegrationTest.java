@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import jakarta.servlet.http.Cookie;
 
 import java.util.UUID;
 
@@ -31,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ExportJobsAndNotificationsApiIntegrationTest {
+
+        private static final String REFRESH_COOKIE_NAME = "TVECO_REFRESH_TOKEN";
 
     @Autowired
     private MockMvc mockMvc;
@@ -70,7 +73,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.success").value(true))
                                 .andExpect(jsonPath("$.data.accessToken").isString())
-                                                                                                                                .andExpect(jsonPath("$.data.refreshToken").isString())
+                                .andExpect(jsonPath("$.data.email").value("admin@tveco.co.za"))
                                 .andReturn();
 
                 return objectMapper.readTree(loginResult.getResponse().getContentAsString())
@@ -79,7 +82,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                 .asText();
         }
 
-                                private String loginAndGetRefreshToken() throws Exception {
+                                private Cookie loginAndGetRefreshCookie() throws Exception {
                                                                 MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                                                                                                                                                                                                 .contentType(MediaType.APPLICATION_JSON)
                                                                                                                                                                                                 .content("""
@@ -90,13 +93,11 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                                                                                                                                                                                                                                                 """))
                                                                                                                                 .andExpect(status().isOk())
                                                                                                                                 .andExpect(jsonPath("$.success").value(true))
-                                                                                                                                .andExpect(jsonPath("$.data.refreshToken").isString())
                                                                                                                                 .andReturn();
 
-                                                                return objectMapper.readTree(loginResult.getResponse().getContentAsString())
-                                                                                                                                .get("data")
-                                                                                                                                .get("refreshToken")
-                                                                                                                                .asText();
+                                                                        Cookie refreshCookie = loginResult.getResponse().getCookie(REFRESH_COOKIE_NAME);
+                                                                        assertThat(refreshCookie).isNotNull();
+                                                                        return refreshCookie;
                                 }
 
         private String bearerToken() throws Exception {
@@ -339,20 +340,14 @@ class ExportJobsAndNotificationsApiIntegrationTest {
     }
 
     @Test
-    void refreshToken_canIssueNewAccessToken() throws Exception {
-        String refreshToken = loginAndGetRefreshToken();
+    void refreshToken_rotationAndLogoutRevokeOldTokens() throws Exception {
+        Cookie firstRefreshCookie = loginAndGetRefreshCookie();
 
         MvcResult refreshResult = mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "refreshToken": "%s"
-                                }
-                                """.formatted(refreshToken)))
+                        .cookie(firstRefreshCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").isString())
-                .andExpect(jsonPath("$.data.refreshToken").isString())
                 .andReturn();
 
         String refreshedAccessToken = objectMapper.readTree(refreshResult.getResponse().getContentAsString())
@@ -360,9 +355,25 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                 .get("accessToken")
                 .asText();
 
+        Cookie rotatedRefreshCookie = refreshResult.getResponse().getCookie(REFRESH_COOKIE_NAME);
+        assertThat(rotatedRefreshCookie).isNotNull();
+
         mockMvc.perform(get("/api/export-jobs")
                         .header(AUTHORIZATION, "Bearer " + refreshedAccessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(firstRefreshCookie))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(rotatedRefreshCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(rotatedRefreshCookie))
+                .andExpect(status().isUnauthorized());
     }
 }

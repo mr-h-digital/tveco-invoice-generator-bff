@@ -4,7 +4,5 @@ public record AuthLoginResponse(
         String email,
         String role,
         String accessToken,
-        long expiresInSeconds,
-        String refreshToken,
-        long refreshExpiresInSeconds
+        long expiresInSeconds
 ) {}
