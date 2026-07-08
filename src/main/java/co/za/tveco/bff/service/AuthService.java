@@ -2,85 +2,131 @@ package co.za.tveco.bff.service;
 
 import co.za.tveco.bff.dto.AuthLoginRequest;
 import co.za.tveco.bff.dto.AuthTokens;
+import co.za.tveco.bff.entity.AppUser;
+import co.za.tveco.bff.entity.RefreshTokenSession;
 import co.za.tveco.bff.exception.UnauthorizedException;
+import co.za.tveco.bff.repository.AppUserRepository;
+import co.za.tveco.bff.repository.RefreshTokenSessionRepository;
 import co.za.tveco.bff.security.JwtService;
-import co.za.tveco.bff.security.RefreshTokenRevocationService;
 import io.jsonwebtoken.JwtException;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class AuthService {
 
-    private final String adminEmail;
-    private final String adminPassword;
+    private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid email or password";
+    private static final String INVALID_REFRESH_TOKEN_MESSAGE = "Invalid refresh token";
+
+    private final AppUserRepository appUserRepository;
+    private final RefreshTokenSessionRepository refreshTokenSessionRepository;
+    private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final RefreshTokenRevocationService refreshTokenRevocationService;
 
     public AuthService(
-            @Value("${app.auth.admin-email:admin@tveco.co.za}") String adminEmail,
-            @Value("${app.auth.admin-password:tveco2026}") String adminPassword,
-            JwtService jwtService,
-            RefreshTokenRevocationService refreshTokenRevocationService
+            AppUserRepository appUserRepository,
+            RefreshTokenSessionRepository refreshTokenSessionRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService
     ) {
-        this.adminEmail = adminEmail.trim().toLowerCase(Locale.ROOT);
-        this.adminPassword = adminPassword;
+        this.appUserRepository = appUserRepository;
+        this.refreshTokenSessionRepository = refreshTokenSessionRepository;
+        this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.refreshTokenRevocationService = refreshTokenRevocationService;
     }
 
+    @Transactional
     public AuthTokens login(AuthLoginRequest req) {
         String incomingEmail = req.email().trim().toLowerCase(Locale.ROOT);
-        if (!adminEmail.equals(incomingEmail) || !adminPassword.equals(req.password())) {
-            throw new UnauthorizedException("Invalid email or password");
+        AppUser user = appUserRepository.findByEmailIgnoreCase(incomingEmail)
+                .filter(AppUser::isActive)
+                .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE));
+
+        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        return issueTokens(adminEmail, "admin");
+        return issueTokens(user);
     }
 
+    @Transactional
     public AuthTokens refresh(String refreshToken) {
         try {
             var claims = jwtService.parseRefreshToken(refreshToken.trim());
-            String email = claims.getSubject();
-            String role = claims.get("role", String.class);
             String tokenId = claims.getId();
-            Instant expiresAt = claims.getExpiration().toInstant();
-
-            if (email == null || role == null || !adminEmail.equals(email.trim().toLowerCase(Locale.ROOT))) {
-                throw new UnauthorizedException("Invalid refresh token");
+            String email = claims.getSubject();
+            if (tokenId == null || email == null) {
+                throw new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE);
             }
 
-            if (refreshTokenRevocationService.isRevoked(tokenId)) {
-                throw new UnauthorizedException("Invalid refresh token");
+            RefreshTokenSession session = refreshTokenSessionRepository.findById(tokenId)
+                    .orElseThrow(() -> new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE));
+
+            if (session.isRevoked() || session.getExpiresAt().isBefore(Instant.now())) {
+                throw new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE);
             }
 
-            refreshTokenRevocationService.revoke(tokenId, expiresAt);
+            AppUser user = appUserRepository.findById(session.getUserId())
+                    .filter(AppUser::isActive)
+                    .orElseThrow(() -> new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE));
 
-            return issueTokens(email, role);
+            if (!user.getEmail().trim().toLowerCase(Locale.ROOT).equals(email.trim().toLowerCase(Locale.ROOT))) {
+                throw new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE);
+            }
+
+            session.setRevoked(true);
+            session.setRevokedAt(Instant.now());
+            refreshTokenSessionRepository.save(session);
+
+            return issueTokens(user);
         } catch (JwtException | IllegalArgumentException ex) {
-            throw new UnauthorizedException("Invalid refresh token");
+            throw new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE);
         }
     }
 
+    @Transactional
     public void logout(String refreshToken) {
         try {
             var claims = jwtService.parseRefreshToken(refreshToken.trim());
-            refreshTokenRevocationService.revoke(claims.getId(), claims.getExpiration().toInstant());
+            String tokenId = claims.getId();
+            if (tokenId == null) {
+                return;
+            }
+
+            refreshTokenSessionRepository.findById(tokenId).ifPresent(session -> {
+                if (!session.isRevoked()) {
+                    session.setRevoked(true);
+                    session.setRevokedAt(Instant.now());
+                    refreshTokenSessionRepository.save(session);
+                }
+            });
         } catch (JwtException | IllegalArgumentException ignored) {
             // Logout should be idempotent, even when token is missing/invalid.
         }
     }
 
-    private AuthTokens issueTokens(String email, String role) {
+    private AuthTokens issueTokens(AppUser user) {
+        String refreshTokenId = UUID.randomUUID().toString();
+        Instant refreshExpiry = Instant.now().plusSeconds(jwtService.getRefreshExpirationSeconds());
+
+        refreshTokenSessionRepository.save(RefreshTokenSession.builder()
+                .tokenId(refreshTokenId)
+                .userId(user.getId())
+                .expiresAt(refreshExpiry)
+                .revoked(false)
+                .build());
+
         return new AuthTokens(
-                email,
-                role,
-                jwtService.generateAccessToken(email, role),
+                user.getEmail(),
+                user.getRole(),
+                jwtService.generateAccessToken(user.getEmail(), user.getRole()),
                 jwtService.getAccessExpirationSeconds(),
-                jwtService.generateRefreshToken(email, role),
+                jwtService.generateRefreshToken(user.getEmail(), user.getRole(), refreshTokenId),
                 jwtService.getRefreshExpirationSeconds()
         );
     }

@@ -34,20 +34,21 @@ public class JwtService {
     }
 
     public String generateAccessToken(String email, String role) {
-        return generateToken(email, role, accessExpirationSeconds, ACCESS_TOKEN_TYPE);
+        return generateToken(email, role, accessExpirationSeconds, ACCESS_TOKEN_TYPE, null);
     }
 
-    public String generateRefreshToken(String email, String role) {
-        return generateToken(email, role, refreshExpirationSeconds, REFRESH_TOKEN_TYPE);
+    public String generateRefreshToken(String email, String role, String tokenId) {
+        return generateToken(email, role, refreshExpirationSeconds, REFRESH_TOKEN_TYPE, tokenId);
     }
 
-    private String generateToken(String email, String role, long expirationSeconds, String tokenType) {
+    private String generateToken(String email, String role, long expirationSeconds, String tokenType, String tokenId) {
         Instant now = Instant.now();
+        String resolvedTokenId = (tokenId == null || tokenId.isBlank()) ? UUID.randomUUID().toString() : tokenId;
         return Jwts.builder()
                 .subject(email)
                 .claim("role", role)
                 .claim(TOKEN_TYPE_CLAIM, tokenType)
-                                .id(UUID.randomUUID().toString())
+                .id(resolvedTokenId)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(expirationSeconds)))
                 .signWith(signingKey)
