@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -57,8 +58,33 @@ class ExportJobsAndNotificationsApiIntegrationTest {
         emailOutboxRepository.deleteAll();
     }
 
+        private String loginAndGetToken() throws Exception {
+                MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "email": "admin@tveco.co.za",
+                                                                  "password": "tveco2026"
+                                                                }
+                                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.accessToken").isString())
+                                .andReturn();
+
+                return objectMapper.readTree(loginResult.getResponse().getContentAsString())
+                                .get("data")
+                                .get("accessToken")
+                                .asText();
+        }
+
+        private String bearerToken() throws Exception {
+                return "Bearer " + loginAndGetToken();
+        }
+
                 @Test
                 void invoiceCanLinkToExportJob() throws Exception {
+                                                                String authHeader = bearerToken();
                                 String createJobPayload = """
                                                                 {
                                                                         "clientId": null,
@@ -79,6 +105,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                                                 """;
 
                                 MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
+                                                                                                .header(AUTHORIZATION, authHeader)
                                                                                                 .contentType(MediaType.APPLICATION_JSON)
                                                                                                 .content(createJobPayload))
                                                                 .andExpect(status().isCreated())
@@ -130,6 +157,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                                                 """.formatted(exportJobId);
 
                                 mockMvc.perform(post("/api/invoices")
+                                                                                                .header(AUTHORIZATION, authHeader)
                                                                                                 .contentType(MediaType.APPLICATION_JSON)
                                                                                                 .content(createInvoicePayload))
                                                                 .andExpect(status().isCreated())
@@ -140,6 +168,13 @@ class ExportJobsAndNotificationsApiIntegrationTest {
 
     @Test
     void exportJobLifecycle_create_patch_tracking_delete() throws Exception {
+        String authHeader = bearerToken();
+
+        mockMvc.perform(get("/api/export-jobs"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unauthorized"));
+
         String createPayload = """
                 {
                   "clientId": null,
@@ -160,6 +195,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                 """;
 
         MvcResult created = mockMvc.perform(post("/api/export-jobs")
+                        .header(AUTHORIZATION, authHeader)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createPayload))
                 .andExpect(status().isCreated())
@@ -173,7 +209,8 @@ class ExportJobsAndNotificationsApiIntegrationTest {
         UUID id = UUID.fromString(createdData.get("id").asText());
         String token = createdData.get("publicTrackingToken").asText();
 
-        mockMvc.perform(get("/api/export-jobs"))
+        mockMvc.perform(get("/api/export-jobs")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.length()").value(1));
@@ -184,22 +221,26 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(id.toString()));
 
         mockMvc.perform(patch("/api/export-jobs/{id}", id)
+                        .header(AUTHORIZATION, authHeader)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SHIPPING\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("SHIPPING"));
 
-        mockMvc.perform(delete("/api/export-jobs/{id}", id))
+        mockMvc.perform(delete("/api/export-jobs/{id}", id)
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/export-jobs"))
+        mockMvc.perform(get("/api/export-jobs")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
     }
 
     @Test
     void notificationAndOutboxLifecycle_emit_markRead_retry_dispatch() throws Exception {
+        String authHeader = bearerToken();
         String emitPayload = """
                 {
                   "eventType": "EXPORT_STATUS_CHANGED",
@@ -214,6 +255,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                 """;
 
         MvcResult emitted = mockMvc.perform(post("/api/notifications/emit")
+                        .header(AUTHORIZATION, authHeader)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(emitPayload))
                 .andExpect(status().isOk())
@@ -224,19 +266,23 @@ class ExportJobsAndNotificationsApiIntegrationTest {
         JsonNode notificationData = objectMapper.readTree(emitted.getResponse().getContentAsString()).get("data");
         String notificationId = notificationData.get("id").asText();
 
-        mockMvc.perform(get("/api/notifications/unread-count"))
+        mockMvc.perform(get("/api/notifications/unread-count")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.count").value(1));
 
-        mockMvc.perform(patch("/api/notifications/{id}/read", notificationId))
+        mockMvc.perform(patch("/api/notifications/{id}/read", notificationId)
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        mockMvc.perform(get("/api/notifications/unread-count"))
+        mockMvc.perform(get("/api/notifications/unread-count")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.count").value(0));
 
-        MvcResult outbox = mockMvc.perform(get("/api/notifications/outbox"))
+        MvcResult outbox = mockMvc.perform(get("/api/notifications/outbox")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andReturn();
@@ -244,17 +290,20 @@ class ExportJobsAndNotificationsApiIntegrationTest {
         JsonNode outboxData = objectMapper.readTree(outbox.getResponse().getContentAsString()).get("data");
         String outboxId = outboxData.get(0).get("id").asText();
 
-        mockMvc.perform(get("/api/notifications/outbox/stats"))
+        mockMvc.perform(get("/api/notifications/outbox/stats")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.pending").value(1))
                 .andExpect(jsonPath("$.data.failed").value(0))
                 .andExpect(jsonPath("$.data.sent").value(0));
 
-        mockMvc.perform(post("/api/notifications/outbox/{id}/retry", outboxId))
+        mockMvc.perform(post("/api/notifications/outbox/{id}/retry", outboxId)
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        MvcResult dispatch = mockMvc.perform(post("/api/notifications/outbox/dispatch"))
+        MvcResult dispatch = mockMvc.perform(post("/api/notifications/outbox/dispatch")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
@@ -262,7 +311,8 @@ class ExportJobsAndNotificationsApiIntegrationTest {
         JsonNode dispatchData = objectMapper.readTree(dispatch.getResponse().getContentAsString()).get("data");
         assertThat(dispatchData.get("skipped").asBoolean()).isTrue();
 
-        mockMvc.perform(delete("/api/notifications/outbox/sent"))
+        mockMvc.perform(delete("/api/notifications/outbox/sent")
+                        .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.removed").value(0));
     }
