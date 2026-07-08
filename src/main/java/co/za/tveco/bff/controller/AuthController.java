@@ -3,6 +3,7 @@ package co.za.tveco.bff.controller;
 import co.za.tveco.bff.dto.ApiResponse;
 import co.za.tveco.bff.dto.AuthLoginRequest;
 import co.za.tveco.bff.dto.AuthLoginResponse;
+import co.za.tveco.bff.dto.AuthRefreshRequest;
 import co.za.tveco.bff.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,5 +22,10 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<AuthLoginResponse> login(@Valid @RequestBody AuthLoginRequest req) {
         return ApiResponse.of(authService.login(req));
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<AuthLoginResponse> refresh(@Valid @RequestBody AuthRefreshRequest req) {
+        return ApiResponse.of(authService.refresh(req));
     }
 }

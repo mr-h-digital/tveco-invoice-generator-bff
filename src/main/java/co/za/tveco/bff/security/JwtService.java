@@ -14,37 +14,72 @@ import java.util.Date;
 @Service
 public class JwtService {
 
+    private static final String TOKEN_TYPE_CLAIM = "tokenType";
+    private static final String ACCESS_TOKEN_TYPE = "access";
+    private static final String REFRESH_TOKEN_TYPE = "refresh";
+
     private final SecretKey signingKey;
-    private final long expirationSeconds;
+    private final long accessExpirationSeconds;
+    private final long refreshExpirationSeconds;
 
     public JwtService(
             @Value("${app.auth.jwt-secret}") String jwtSecret,
-            @Value("${app.auth.jwt-expiration-seconds:43200}") long expirationSeconds
+            @Value("${app.auth.jwt-expiration-seconds:43200}") long accessExpirationSeconds,
+            @Value("${app.auth.jwt-refresh-expiration-seconds:1209600}") long refreshExpirationSeconds
     ) {
         this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        this.expirationSeconds = expirationSeconds;
+        this.accessExpirationSeconds = accessExpirationSeconds;
+        this.refreshExpirationSeconds = refreshExpirationSeconds;
     }
 
-    public String generateToken(String email, String role) {
+    public String generateAccessToken(String email, String role) {
+        return generateToken(email, role, accessExpirationSeconds, ACCESS_TOKEN_TYPE);
+    }
+
+    public String generateRefreshToken(String email, String role) {
+        return generateToken(email, role, refreshExpirationSeconds, REFRESH_TOKEN_TYPE);
+    }
+
+    private String generateToken(String email, String role, long expirationSeconds, String tokenType) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(email)
                 .claim("role", role)
+                .claim(TOKEN_TYPE_CLAIM, tokenType)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(expirationSeconds)))
                 .signWith(signingKey)
                 .compact();
     }
 
-    public Claims parseToken(String token) {
-        return Jwts.parser()
+    public Claims parseAccessToken(String token) {
+        return parseTokenWithType(token, ACCESS_TOKEN_TYPE);
+    }
+
+    public Claims parseRefreshToken(String token) {
+        return parseTokenWithType(token, REFRESH_TOKEN_TYPE);
+    }
+
+    private Claims parseTokenWithType(String token, String expectedType) {
+        Claims claims = Jwts.parser()
                 .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+
+        String tokenType = claims.get(TOKEN_TYPE_CLAIM, String.class);
+        if (!expectedType.equals(tokenType)) {
+            throw new IllegalArgumentException("Invalid token type");
+        }
+
+        return claims;
     }
 
-    public long getExpirationSeconds() {
-        return expirationSeconds;
+    public long getAccessExpirationSeconds() {
+        return accessExpirationSeconds;
+    }
+
+    public long getRefreshExpirationSeconds() {
+        return refreshExpirationSeconds;
     }
 }

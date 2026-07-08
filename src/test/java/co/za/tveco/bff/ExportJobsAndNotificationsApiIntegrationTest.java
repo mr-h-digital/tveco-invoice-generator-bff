@@ -70,6 +70,7 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.success").value(true))
                                 .andExpect(jsonPath("$.data.accessToken").isString())
+                                                                                                                                .andExpect(jsonPath("$.data.refreshToken").isString())
                                 .andReturn();
 
                 return objectMapper.readTree(loginResult.getResponse().getContentAsString())
@@ -77,6 +78,26 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                                 .get("accessToken")
                                 .asText();
         }
+
+                                private String loginAndGetRefreshToken() throws Exception {
+                                                                MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                                                                                                                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                                                                                                                .content("""
+                                                                                                                                                                                                                                                                {
+                                                                                                                                                                                                                                                                        "email": "admin@tveco.co.za",
+                                                                                                                                                                                                                                                                        "password": "tveco2026"
+                                                                                                                                                                                                                                                                }
+                                                                                                                                                                                                                                                                """))
+                                                                                                                                .andExpect(status().isOk())
+                                                                                                                                .andExpect(jsonPath("$.success").value(true))
+                                                                                                                                .andExpect(jsonPath("$.data.refreshToken").isString())
+                                                                                                                                .andReturn();
+
+                                                                return objectMapper.readTree(loginResult.getResponse().getContentAsString())
+                                                                                                                                .get("data")
+                                                                                                                                .get("refreshToken")
+                                                                                                                                .asText();
+                                }
 
         private String bearerToken() throws Exception {
                 return "Bearer " + loginAndGetToken();
@@ -315,5 +336,33 @@ class ExportJobsAndNotificationsApiIntegrationTest {
                         .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.removed").value(0));
+    }
+
+    @Test
+    void refreshToken_canIssueNewAccessToken() throws Exception {
+        String refreshToken = loginAndGetRefreshToken();
+
+        MvcResult refreshResult = mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").isString())
+                .andExpect(jsonPath("$.data.refreshToken").isString())
+                .andReturn();
+
+        String refreshedAccessToken = objectMapper.readTree(refreshResult.getResponse().getContentAsString())
+                .get("data")
+                .get("accessToken")
+                .asText();
+
+        mockMvc.perform(get("/api/export-jobs")
+                        .header(AUTHORIZATION, "Bearer " + refreshedAccessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 }
