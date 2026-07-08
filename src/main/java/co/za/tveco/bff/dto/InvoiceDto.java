@@ -13,6 +13,7 @@ public record InvoiceDto(
         LocalDate issueDate,
         LocalDate dueDate,
         UUID clientId,
+        UUID exportJobId,
         ClientSnapshotDto clientSnapshot,
         List<LineItemDto> lineItems,
         BigDecimal subtotal,

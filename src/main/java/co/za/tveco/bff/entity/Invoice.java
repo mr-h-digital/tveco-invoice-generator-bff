@@ -40,6 +40,9 @@ public class Invoice {
     @Column(name = "client_id")
     private UUID clientId;
 
+    @Column(name = "export_job_id")
+    private UUID exportJobId;
+
     // Client snapshot
     @Column(name = "snap_company_name")
     private String snapCompanyName;

@@ -5,6 +5,7 @@ import co.za.tveco.bff.entity.Invoice;
 import co.za.tveco.bff.entity.LineItem;
 import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
+import co.za.tveco.bff.repository.ExportJobRepository;
 import co.za.tveco.bff.repository.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
+    private final ExportJobRepository exportJobRepository;
 
     // ── Read ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,7 @@ public class InvoiceService {
         if (invoiceRepository.existsByInvoiceNumber(req.invoiceNumber())) {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' already exists");
         }
+        validateExportJobId(req.exportJobId());
         Invoice invoice = buildInvoice(new Invoice(), req);
         return toDto(invoiceRepository.save(invoice));
     }
@@ -60,6 +63,7 @@ public class InvoiceService {
         if (invoiceRepository.existsByInvoiceNumberAndIdNot(req.invoiceNumber(), id)) {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' is already used by another invoice");
         }
+        validateExportJobId(req.exportJobId());
         invoice.getLineItems().clear();
         buildInvoice(invoice, req);
         return toDto(invoiceRepository.save(invoice));
@@ -91,6 +95,7 @@ public class InvoiceService {
                 .issueDate(LocalDate.now())
                 .dueDate(original.getDueDate())
                 .clientId(original.getClientId())
+                .exportJobId(original.getExportJobId())
                 .snapCompanyName(original.getSnapCompanyName())
                 .snapContactName(original.getSnapContactName())
                 .snapEmail(original.getSnapEmail())
@@ -145,6 +150,7 @@ public class InvoiceService {
         invoice.setIssueDate(LocalDate.parse(req.issueDate()));
         invoice.setDueDate(LocalDate.parse(req.dueDate()));
         invoice.setClientId(req.clientId());
+        invoice.setExportJobId(req.exportJobId());
 
         ClientSnapshotDto snap = req.clientSnapshot();
         invoice.setSnapCompanyName(nvl(snap.companyName()));
@@ -199,6 +205,15 @@ public class InvoiceService {
         return s == null ? "" : s;
     }
 
+    private void validateExportJobId(UUID exportJobId) {
+        if (exportJobId == null) {
+            return;
+        }
+        if (!exportJobRepository.existsById(exportJobId)) {
+            throw new ResourceNotFoundException("Export job not found: " + exportJobId);
+        }
+    }
+
     // ── Mapper ───────────────────────────────────────────────────────────────
 
     InvoiceDto toDto(Invoice inv) {
@@ -221,6 +236,7 @@ public class InvoiceService {
                 inv.getIssueDate(),
                 inv.getDueDate(),
                 inv.getClientId(),
+                inv.getExportJobId(),
                 new ClientSnapshotDto(
                         inv.getSnapCompanyName(),
                         inv.getSnapContactName(),

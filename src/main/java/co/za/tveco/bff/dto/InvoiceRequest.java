@@ -26,6 +26,8 @@ public record InvoiceRequest(
 
         UUID clientId,
 
+        UUID exportJobId,
+
         @NotNull @Valid
         ClientSnapshotDto clientSnapshot,
 
