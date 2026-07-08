@@ -3,6 +3,7 @@ package co.za.tveco.bff;
 import co.za.tveco.bff.repository.AppNotificationRepository;
 import co.za.tveco.bff.repository.EmailOutboxRepository;
 import co.za.tveco.bff.repository.ExportJobRepository;
+import co.za.tveco.bff.repository.InvoiceRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,12 +46,97 @@ class ExportJobsAndNotificationsApiIntegrationTest {
     @Autowired
     private EmailOutboxRepository emailOutboxRepository;
 
+        @Autowired
+        private InvoiceRepository invoiceRepository;
+
     @BeforeEach
     void cleanData() {
+                                invoiceRepository.deleteAll();
         exportJobRepository.deleteAll();
         appNotificationRepository.deleteAll();
         emailOutboxRepository.deleteAll();
     }
+
+                @Test
+                void invoiceCanLinkToExportJob() throws Exception {
+                                String createJobPayload = """
+                                                                {
+                                                                        "clientId": null,
+                                                                        "clientSnapshot": {
+                                                                                "companyName": "Kabila Muteba Enterprises",
+                                                                                "contactName": "Kabila Muteba",
+                                                                                "email": "kabila@example.zm",
+                                                                                "phone": "+260970000001"
+                                                                        },
+                                                                        "destinationCountry": "Zambia",
+                                                                        "vehicleDescription": "Toyota Land Cruiser 200",
+                                                                        "sourceChannel": "Website",
+                                                                        "projectValue": 52700,
+                                                                        "estimatedDepartureDate": "2026-07-12",
+                                                                        "estimatedArrivalDate": "2026-08-05",
+                                                                        "notes": "Linked invoice verification"
+                                                                }
+                                                                """;
+
+                                MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
+                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                .content(createJobPayload))
+                                                                .andExpect(status().isCreated())
+                                                                .andReturn();
+
+                                String exportJobId = objectMapper.readTree(createdJob.getResponse().getContentAsString())
+                                                                .get("data")
+                                                                .get("id")
+                                                                .asText();
+
+                                String createInvoicePayload = """
+                                                                {
+                                                                        "invoiceNumber": "TVECO-2026-901",
+                                                                        "status": "DRAFT",
+                                                                        "issueDate": "2026-07-01",
+                                                                        "dueDate": "2026-07-15",
+                                                                        "clientId": null,
+                                                                        "exportJobId": "%s",
+                                                                        "clientSnapshot": {
+                                                                                "companyName": "Kabila Muteba Enterprises",
+                                                                                "contactName": "Kabila Muteba",
+                                                                                "email": "kabila@example.zm",
+                                                                                "phone": "+260970000001",
+                                                                                "address": "Lusaka, Zambia"
+                                                                        },
+                                                                        "lineItems": [
+                                                                                {
+                                                                                        "name": "Vehicle sourcing",
+                                                                                        "description": "Sourcing and verification",
+                                                                                        "quantity": 1,
+                                                                                        "unitPrice": 52700,
+                                                                                        "sortOrder": 0
+                                                                                }
+                                                                        ],
+                                                                        "discountType": null,
+                                                                        "discountValue": 0,
+                                                                        "vatEnabled": false,
+                                                                        "vatRate": 0.15,
+                                                                        "notes": "Test invoice",
+                                                                        "paymentDetails": {
+                                                                                "bank": "FNB",
+                                                                                "accountName": "TVECO",
+                                                                                "accountNumber": "1234567890",
+                                                                                "accountType": "Business",
+                                                                                "branchCode": "250655",
+                                                                                "reference": "TVECO-2026-901"
+                                                                        }
+                                                                }
+                                                                """.formatted(exportJobId);
+
+                                mockMvc.perform(post("/api/invoices")
+                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                .content(createInvoicePayload))
+                                                                .andExpect(status().isCreated())
+                                                                .andExpect(jsonPath("$.success").value(true))
+                                                                .andExpect(jsonPath("$.data.exportJobId").value(exportJobId))
+                                                                .andExpect(jsonPath("$.data.total").value(52700));
+                }
 
     @Test
     void exportJobLifecycle_create_patch_tracking_delete() throws Exception {
