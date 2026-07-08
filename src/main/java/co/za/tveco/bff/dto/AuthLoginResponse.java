@@ -1,0 +1,6 @@
+package co.za.tveco.bff.dto;
+
+public record AuthLoginResponse(
+        String email,
+        String role
+) {}
