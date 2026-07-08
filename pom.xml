@@ -16,7 +16,7 @@
     <artifactId>tveco-invoice-generator-bff</artifactId>
     <version>1.0.0</version>
     <name>tveco-invoice-generator-bff</name>
-    <description>Backend-for-Frontend for the TVECO Invoice Generator</description>
+    <description>Backend-for-Frontend for TVECO Operations Hub</description>
 
     <properties>
         <java.version>21</java.version>
