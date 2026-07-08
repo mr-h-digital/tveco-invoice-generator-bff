@@ -2,10 +2,10 @@
 	<img src="assets/tveco-logo.png" alt="TVECO Logo" width="180" />
 </p>
 
-<h1 align="center">TVECO — Invoice Generator BFF</h1>
+<h1 align="center">TVECO Operations Hub BFF</h1>
 
 <p align="center">
-	<strong>Backend-for-Frontend API powering the TVECO Invoice Generator for Timeline Vehicle Export Company (Pty) Ltd.</strong>
+  <strong>Backend-for-Frontend API powering TVECO Operations Hub for Timeline Vehicle Export Company (Pty) Ltd.</strong>
 </p>
 
 <p align="center">
@@ -31,13 +31,15 @@
 
 ## Overview
 
-This repository contains the Spring Boot Backend-for-Frontend (BFF) for the **TVECO Invoice Generator** — the internal invoicing system used by Timeline Vehicle Export Company (Pty) Ltd.
+This repository contains the Spring Boot Backend-for-Frontend (BFF) for **TVECO Operations Hub** — the internal commercial operations system used by Timeline Vehicle Export Company (Pty) Ltd.
 
 The BFF acts as the persistence and business-logic layer behind the React web UI. When the front-end is configured with `VITE_USE_API=true`, all invoice and client data flows through this API instead of `localStorage`.
 
 The API provides:
 
 - Full CRUD for invoices and export clients
+- Export Jobs pipeline APIs (create/update/tracking/delete)
+- In-app notifications and email outbox APIs
 - Invoice duplication and status lifecycle management
 - Auto-generated sequential invoice numbers (`TVECO-YYYY-NNN`)
 - Analytics endpoint for dashboard revenue and status summaries
@@ -49,9 +51,13 @@ The API provides:
 ## Features
 
 - **Invoice management** — create, read, update, delete, and duplicate invoices with full line-item support
+- **Quote management** — create, read, update, delete, and duplicate quotes with full line-item support
 - **Status lifecycle** — `DRAFT → SENT → PAID / OVERDUE` transitions via a dedicated PATCH endpoint
 - **Client management** — full CRUD for saved export clients; client snapshot is embedded in each invoice at creation time so records are preserved if a client is later deleted
 - **Auto invoice numbering** — generates the next `TVECO-YYYY-NNN` number based on the highest existing invoice for the current year
+- **Auto quote numbering** — generates the next `QUO-YYYY-NNN` number based on the highest existing quote for the current year
+- **Export Jobs APIs** — supports operational pipeline records with milestones, document checklist, payment milestones, vault metadata, and public tracking token lookup
+- **Notifications + outbox APIs** — supports in-app notification feed, unread count, outbox queue stats/list, retry, cleanup, and dispatch
 - **Analytics API** — aggregates total revenue, outstanding amount, invoice counts by status, and monthly revenue breakdown for a configurable date range (defaults to last 6 months)
 - **Validation** — Bean Validation on all request bodies; a `GlobalExceptionHandler` returns consistent `ApiResponse` error envelopes
 - **CORS** — configurable allowed origins via `CORS_ALLOWED_ORIGINS` environment variable
@@ -97,7 +103,10 @@ tveco-invoice-generator-bff/
     │   │   │
     │   │   ├── controller/
     │   │   │   ├── InvoiceController.java                 # /api/invoices
+    │   │   │   ├── QuoteController.java                   # /api/quotes
     │   │   │   ├── ClientController.java                  # /api/clients
+    │   │   │   ├── ExportJobController.java               # /api/export-jobs
+    │   │   │   ├── NotificationController.java            # /api/notifications
     │   │   │   └── AnalyticsController.java               # /api/analytics
     │   │   │
     │   │   ├── dto/
@@ -116,8 +125,13 @@ tveco-invoice-generator-bff/
     │   │   │
     │   │   ├── entity/
     │   │   │   ├── Invoice.java
+    │   │   │   ├── Quote.java
     │   │   │   ├── Client.java
-    │   │   │   └── LineItem.java
+    │   │   │   ├── LineItem.java
+    │   │   │   ├── QuoteLineItem.java
+    │   │   │   ├── ExportJob.java
+    │   │   │   ├── AppNotification.java
+    │   │   │   └── EmailOutboxMessage.java
     │   │   │
     │   │   ├── exception/
     │   │   │   ├── GlobalExceptionHandler.java            # @ControllerAdvice error handling
@@ -126,18 +140,27 @@ tveco-invoice-generator-bff/
     │   │   │
     │   │   ├── repository/
     │   │   │   ├── InvoiceRepository.java
-    │   │   │   └── ClientRepository.java
+    │   │   │   ├── QuoteRepository.java
+    │   │   │   ├── ClientRepository.java
+    │   │   │   ├── ExportJobRepository.java
+    │   │   │   ├── AppNotificationRepository.java
+    │   │   │   └── EmailOutboxRepository.java
     │   │   │
     │   │   └── service/
     │   │       ├── InvoiceService.java
+    │   │       ├── QuoteService.java
     │   │       ├── InvoiceCalculator.java                 # Subtotal / VAT / total logic
     │   │       ├── ClientService.java
+    │   │       ├── ExportJobService.java
+    │   │       ├── NotificationService.java
     │   │       └── AnalyticsService.java
     │   │
     │   └── resources/
     │       ├── application.properties
     │       └── db/migration/
     │           └── V1__init_schema.sql                    # Tables: clients, invoices, line_items
+    │           ├── V2__add_quotes.sql                     # Tables: quotes, quote_line_items
+    │           └── V3__add_export_jobs_and_notifications.sql
     │
     └── test/
         ├── java/co/za/tveco/bff/
@@ -178,6 +201,19 @@ Errors return `"success": false` with an `"error"` field and the appropriate HTT
 | `POST` | `/api/invoices/{id}/duplicate` | Duplicate an invoice as a new DRAFT |
 | `DELETE` | `/api/invoices/{id}` | Delete an invoice |
 
+### Quotes — `/api/quotes`
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/quotes` | List all quotes (paginated, newest first) |
+| `GET` | `/api/quotes/{id}` | Get single quote by UUID |
+| `GET` | `/api/quotes/next-number` | Get the next auto-generated quote number |
+| `POST` | `/api/quotes` | Create a new quote |
+| `PUT` | `/api/quotes/{id}` | Full update of a quote |
+| `PATCH` | `/api/quotes/{id}/status` | Update quote status only |
+| `POST` | `/api/quotes/{id}/duplicate` | Duplicate a quote as a new DRAFT |
+| `DELETE` | `/api/quotes/{id}` | Delete a quote |
+
 ### Clients — `/api/clients`
 
 | Method | Path | Description |
@@ -195,6 +231,30 @@ Errors return `"success": false` with an `"error"` field and the appropriate HTT
 | `GET` | `/api/analytics` | Revenue summary for a date range |
 
 Query parameters: `from` and `to` (ISO date, e.g. `2026-01-01`). Both are optional and default to the last 6 months.
+
+### Export Jobs — `/api/export-jobs`
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/export-jobs` | List all export jobs |
+| `POST` | `/api/export-jobs` | Create a new export job |
+| `PATCH` | `/api/export-jobs/{id}` | Partial update for export job fields |
+| `DELETE` | `/api/export-jobs/{id}` | Delete an export job |
+| `GET` | `/api/export-jobs/tracking/{token}` | Lookup by public tracking token |
+
+### Notifications — `/api/notifications`
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/notifications` | List notifications (newest first) |
+| `PATCH` | `/api/notifications/{id}/read` | Mark notification as read |
+| `POST` | `/api/notifications/emit` | Emit notification and optionally queue outbox email |
+| `GET` | `/api/notifications/unread-count` | Fetch unread notification count |
+| `GET` | `/api/notifications/outbox/stats` | Fetch outbox status counts |
+| `GET` | `/api/notifications/outbox` | List outbox messages |
+| `POST` | `/api/notifications/outbox/{id}/retry` | Reset a failed message to pending |
+| `DELETE` | `/api/notifications/outbox/sent` | Delete all sent outbox messages |
+| `POST` | `/api/notifications/outbox/dispatch` | Dispatch pending outbox emails to webhook |
 
 ### Health — `/actuator/health`
 
@@ -308,6 +368,8 @@ API runs at **http://localhost:8080**
 | `DATABASE_URL` | `jdbc:postgresql://localhost:5432/tveco` | Full PostgreSQL JDBC URL (Railway sets this automatically) |
 | `PORT` | `8080` | HTTP port the server binds to |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | Comma-separated list of allowed front-end origins |
+| `NOTIFICATION_WEBHOOK_URL` | _(empty)_ | Outbox dispatch webhook URL (optional) |
+| `NOTIFICATION_WEBHOOK_SECRET` | _(empty)_ | Shared secret header value for outbox webhook |
 
 On Railway, `DATABASE_URL` is injected automatically when a PostgreSQL service is linked to this deployment.
 
@@ -365,6 +427,11 @@ Steps:
 ```
 
 Tests use an H2 in-memory database (configured in `application-test.properties`) so no PostgreSQL instance is required.
+
+Key integration coverage now includes:
+
+- Export Jobs lifecycle (create, list, patch status, tracking lookup, delete)
+- Notifications and outbox lifecycle (emit, unread count, mark read, outbox list/stats, retry, dispatch, clear sent)
 
 ---
 
