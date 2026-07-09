@@ -80,6 +80,9 @@ public class ExportJob {
     @Column(name = "notes", nullable = false, columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
+    private String cancellationReason;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

@@ -44,6 +44,15 @@ public class ExportJobController {
         return ApiResponse.of(exportJobService.patch(id, patch));
     }
 
+    @PostMapping("/{id}/cancel")
+    public ApiResponse<ExportJobDto> cancel(@PathVariable UUID id, @RequestBody Map<String, String> payload) {
+        String reason = payload == null ? null : payload.get("reason");
+        return ApiResponse.of(exportJobService.patch(id, Map.of(
+                "status", "CANCELLED",
+                "cancellationReason", reason == null ? "" : reason
+        )));
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {

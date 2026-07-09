@@ -42,4 +42,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     @Query("SELECT COUNT(i) FROM Invoice i WHERE i.status = :status")
     long countByStatus(@Param("status") String status);
+
+    long countByExportJobId(UUID exportJobId);
 }

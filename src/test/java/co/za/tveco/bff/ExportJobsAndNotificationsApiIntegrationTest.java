@@ -245,6 +245,22 @@ class ExportJobsAndNotificationsApiIntegrationTest {
         mockMvc.perform(patch("/api/export-jobs/{id}", id)
                         .header(AUTHORIZATION, authHeader)
                         .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SOURCING\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("SOURCING"));
+
+        mockMvc.perform(patch("/api/export-jobs/{id}", id)
+                        .header(AUTHORIZATION, authHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DOCUMENTATION\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("DOCUMENTATION"));
+
+        mockMvc.perform(patch("/api/export-jobs/{id}", id)
+                        .header(AUTHORIZATION, authHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SHIPPING\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -252,12 +268,21 @@ class ExportJobsAndNotificationsApiIntegrationTest {
 
         mockMvc.perform(delete("/api/export-jobs/{id}", id)
                         .header(AUTHORIZATION, authHeader))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/export-jobs/{id}/cancel", id)
+                        .header(AUTHORIZATION, authHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Client withdrew order\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.cancellationReason").value("Client withdrew order"));
 
         mockMvc.perform(get("/api/export-jobs")
                         .header(AUTHORIZATION, authHeader))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(0));
+                .andExpect(jsonPath("$.data.length()").value(1));
     }
 
     @Test

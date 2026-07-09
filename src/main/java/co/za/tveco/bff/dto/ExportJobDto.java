@@ -25,6 +25,7 @@ public record ExportJobDto(
         LocalDate estimatedDepartureDate,
         LocalDate estimatedArrivalDate,
         String notes,
+        String cancellationReason,
         Instant createdAt,
         Instant updatedAt
 ) {}

@@ -3,8 +3,10 @@ package co.za.tveco.bff.service;
 import co.za.tveco.bff.dto.ExportJobCreateRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
 import co.za.tveco.bff.entity.ExportJob;
+import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
 import co.za.tveco.bff.repository.ExportJobRepository;
+import co.za.tveco.bff.repository.InvoiceRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,9 +28,23 @@ import java.util.UUID;
 public class ExportJobService {
 
     private static final List<String> STATUS_ORDER = List.of("ENQUIRY", "SOURCING", "DOCUMENTATION", "SHIPPING", "DELIVERED");
+    private static final List<String> ALL_STATUSES = List.of("ENQUIRY", "SOURCING", "DOCUMENTATION", "SHIPPING", "DELIVERED", "CANCELLED");
+    private static final List<String> CORE_EDITABLE_STATUSES = List.of("ENQUIRY", "SOURCING", "DOCUMENTATION");
+    private static final List<String> TERMINAL_STATUSES = List.of("DELIVERED", "CANCELLED");
     private static final List<String> SOURCE_CHANNELS = List.of("Website", "WhatsApp", "Referral", "Direct");
+    private static final List<String> CORE_FIELDS = List.of(
+            "clientId",
+            "clientSnapshot",
+            "destinationCountry",
+            "vehicleDescription",
+            "sourceChannel",
+            "projectValue",
+            "estimatedDepartureDate",
+            "estimatedArrivalDate"
+    );
 
     private final ExportJobRepository exportJobRepository;
+    private final InvoiceRepository invoiceRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -84,6 +100,7 @@ public class ExportJobService {
                 .estimatedDepartureDate(departure)
                 .estimatedArrivalDate(arrival)
                 .notes(req.notes() == null ? "" : req.notes())
+                .cancellationReason(null)
                 .build();
 
         return toDto(exportJobRepository.save(entity));
@@ -92,6 +109,17 @@ public class ExportJobService {
     @Transactional
     public ExportJobDto patch(UUID id, Map<String, Object> patch) {
         ExportJob job = findOrThrow(id);
+
+        if (TERMINAL_STATUSES.contains(job.getStatus())) {
+            throw new ConflictException("Export job can no longer be edited once it is " + job.getStatus());
+        }
+
+        if (!CORE_EDITABLE_STATUSES.contains(job.getStatus())) {
+            boolean hasCoreFieldChanges = patch.keySet().stream().anyMatch(CORE_FIELDS::contains);
+            if (hasCoreFieldChanges) {
+                throw new ConflictException("Core export job details cannot be edited once shipping has started");
+            }
+        }
 
         if (patch.containsKey("clientId")) {
             Object value = patch.get("clientId");
@@ -124,10 +152,45 @@ public class ExportJobService {
         }
         if (patch.containsKey("status")) {
             String status = String.valueOf(patch.get("status"));
-            if (!STATUS_ORDER.contains(status)) {
+            if (!ALL_STATUSES.contains(status)) {
                 throw new IllegalArgumentException("Invalid export job status");
             }
+
+            if (!status.equals(job.getStatus())) {
+                int currentIdx = STATUS_ORDER.indexOf(job.getStatus());
+                int nextIdx = STATUS_ORDER.indexOf(status);
+
+                if (!"CANCELLED".equals(status)) {
+                    if (currentIdx < 0 || nextIdx < 0 || nextIdx != currentIdx + 1) {
+                        throw new ConflictException("Status can only move forward one stage at a time");
+                    }
+                }
+            }
+
+            if ("CANCELLED".equals(status)) {
+                Object reasonValue = patch.get("cancellationReason");
+                String reason = reasonValue == null ? "" : String.valueOf(reasonValue).trim();
+                if (reason.isBlank()) {
+                    throw new IllegalArgumentException("Cancellation reason is required when cancelling an export job");
+                }
+                job.setCancellationReason(reason);
+            } else {
+                job.setCancellationReason(null);
+            }
+
             job.setStatus(status);
+        }
+
+        if (patch.containsKey("cancellationReason") && !"CANCELLED".equals(job.getStatus())) {
+            throw new IllegalArgumentException("Cancellation reason can only be set when status is CANCELLED");
+        }
+
+        if (patch.containsKey("cancellationReason") && "CANCELLED".equals(job.getStatus())) {
+            String reason = String.valueOf(patch.get("cancellationReason")).trim();
+            if (reason.isBlank()) {
+                throw new IllegalArgumentException("Cancellation reason is required when cancelling an export job");
+            }
+            job.setCancellationReason(reason);
         }
         if (patch.containsKey("milestones")) {
             job.setMilestones(writeJson(objectMapper.valueToTree(patch.get("milestones"))));
@@ -157,9 +220,16 @@ public class ExportJobService {
 
     @Transactional
     public void delete(UUID id) {
-        if (!exportJobRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Export job not found: " + id);
+        ExportJob job = findOrThrow(id);
+        if (!"ENQUIRY".equals(job.getStatus())) {
+            throw new ConflictException("Only ENQUIRY export jobs can be deleted");
         }
+
+        long linkedInvoices = invoiceRepository.countByExportJobId(id);
+        if (linkedInvoices > 0) {
+            throw new ConflictException("Cannot delete export job because it has linked invoices");
+        }
+
         exportJobRepository.deleteById(id);
     }
 
@@ -314,6 +384,7 @@ public class ExportJobService {
                 e.getEstimatedDepartureDate(),
                 e.getEstimatedArrivalDate(),
                 e.getNotes(),
+                e.getCancellationReason(),
                 e.getCreatedAt(),
                 e.getUpdatedAt()
         );
