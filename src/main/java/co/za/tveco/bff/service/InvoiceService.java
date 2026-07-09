@@ -17,8 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,7 +57,7 @@ public class InvoiceService {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' already exists");
         }
         Invoice invoice = buildInvoice(new Invoice(), req);
-        validateExportJobInvoiceBudget(req.exportJobId(), invoice.getTotal(), null);
+        validateExportJobInvoiceBudget(req.exportJobId(), req.paymentMilestoneKey(), invoice.getSubtotal(), null);
         return toDto(invoiceRepository.save(invoice));
     }
 
@@ -69,7 +69,7 @@ public class InvoiceService {
         }
         invoice.getLineItems().clear();
         buildInvoice(invoice, req);
-        validateExportJobInvoiceBudget(req.exportJobId(), invoice.getTotal(), id);
+        validateExportJobInvoiceBudget(req.exportJobId(), req.paymentMilestoneKey(), invoice.getSubtotal(), id);
         return toDto(invoiceRepository.save(invoice));
     }
 
@@ -100,6 +100,7 @@ public class InvoiceService {
                 .dueDate(original.getDueDate())
                 .clientId(original.getClientId())
                 .exportJobId(original.getExportJobId())
+            .paymentMilestoneKey(original.getPaymentMilestoneKey())
                 .snapCompanyName(original.getSnapCompanyName())
                 .snapContactName(original.getSnapContactName())
                 .snapEmail(original.getSnapEmail())
@@ -155,6 +156,7 @@ public class InvoiceService {
         invoice.setDueDate(LocalDate.parse(req.dueDate()));
         invoice.setClientId(req.clientId());
         invoice.setExportJobId(req.exportJobId());
+        invoice.setPaymentMilestoneKey(req.paymentMilestoneKey() == null || req.paymentMilestoneKey().isBlank() ? null : req.paymentMilestoneKey().trim());
 
         ClientSnapshotDto snap = req.clientSnapshot();
         invoice.setSnapCompanyName(nvl(snap.companyName()));
@@ -209,7 +211,7 @@ public class InvoiceService {
         return s == null ? "" : s;
     }
 
-    private void validateExportJobInvoiceBudget(UUID exportJobId, BigDecimal invoiceTotal, UUID invoiceIdToExclude) {
+    private void validateExportJobInvoiceBudget(UUID exportJobId, String paymentMilestoneKey, BigDecimal invoiceSubtotal, UUID invoiceIdToExclude) {
         if (exportJobId == null) {
             return;
         }
@@ -217,29 +219,48 @@ public class InvoiceService {
         ExportJob exportJob = exportJobRepository.findById(exportJobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Export job not found: " + exportJobId));
 
-        BigDecimal allowedTotal = resolveAllowedTotal(exportJob);
-        BigDecimal existingTotal = invoiceIdToExclude == null
-                ? invoiceRepository.sumTotalByExportJobId(exportJobId)
-                : invoiceRepository.sumTotalByExportJobIdAndIdNot(exportJobId, invoiceIdToExclude);
-
-        BigDecimal nextTotal = existingTotal.add(invoiceTotal);
-        if (nextTotal.compareTo(allowedTotal) > 0) {
+        BigDecimal allowedSubtotal = resolveAllowedSubtotal(exportJob, paymentMilestoneKey);
+        BigDecimal normalizedSubtotal = invoiceSubtotal.setScale(2, RoundingMode.HALF_UP);
+        if (normalizedSubtotal.compareTo(allowedSubtotal) != 0) {
             throw new ConflictException(
-                    "Linked invoice totals exceed export job payment milestones total (%s > %s)"
-                            .formatted(nextTotal.stripTrailingZeros().toPlainString(), allowedTotal.stripTrailingZeros().toPlainString())
+                    "Invoice subtotal must match the linked export job amount (%s != %s)"
+                            .formatted(normalizedSubtotal.stripTrailingZeros().toPlainString(), allowedSubtotal.stripTrailingZeros().toPlainString())
+            );
+        }
+
+        BigDecimal existingSubtotal = invoiceIdToExclude == null
+                ? invoiceRepository.sumSubtotalByExportJobId(exportJobId)
+                : invoiceRepository.sumSubtotalByExportJobIdAndIdNot(exportJobId, invoiceIdToExclude);
+
+        BigDecimal nextSubtotal = existingSubtotal.add(normalizedSubtotal);
+        if (nextSubtotal.compareTo(exportJob.getProjectValue().setScale(2, RoundingMode.HALF_UP)) > 0) {
+            throw new ConflictException(
+                    "Linked invoice subtotals exceed export job project value (%s > %s)"
+                            .formatted(nextSubtotal.stripTrailingZeros().toPlainString(), exportJob.getProjectValue().stripTrailingZeros().toPlainString())
             );
         }
     }
 
-    private BigDecimal resolveAllowedTotal(ExportJob exportJob) {
+    private BigDecimal resolveAllowedSubtotal(ExportJob exportJob, String paymentMilestoneKey) {
         try {
             JsonNode root = objectMapper.readTree(exportJob.getPaymentMilestones());
             if (!root.isArray()) {
-                return exportJob.getProjectValue();
+                return exportJob.getProjectValue().setScale(2, RoundingMode.HALF_UP);
+            }
+
+            List<JsonNode> milestones = new java.util.ArrayList<>();
+            root.forEach(milestones::add);
+
+            if (paymentMilestoneKey != null && !paymentMilestoneKey.isBlank()) {
+                return milestones.stream()
+                        .filter(node -> paymentMilestoneKey.equals(node.path("key").asText(null)))
+                        .findFirst()
+                        .map(node -> node.path("amount").decimalValue().setScale(2, RoundingMode.HALF_UP))
+                        .orElseThrow(() -> new ConflictException("Payment milestone not found on export job: " + paymentMilestoneKey));
             }
 
             BigDecimal sum = BigDecimal.ZERO;
-            for (JsonNode node : root) {
+            for (JsonNode node : milestones) {
                 JsonNode amountNode = node.get("amount");
                 if (amountNode == null || amountNode.isNull()) {
                     continue;
@@ -248,11 +269,11 @@ public class InvoiceService {
             }
 
             if (sum.compareTo(BigDecimal.ZERO) <= 0) {
-                return exportJob.getProjectValue();
+                return exportJob.getProjectValue().setScale(2, RoundingMode.HALF_UP);
             }
-            return sum;
-        } catch (Exception ignored) {
-            return exportJob.getProjectValue();
+            return sum.setScale(2, RoundingMode.HALF_UP);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+            return exportJob.getProjectValue().setScale(2, RoundingMode.HALF_UP);
         }
     }
 
@@ -279,6 +300,7 @@ public class InvoiceService {
                 inv.getDueDate(),
                 inv.getClientId(),
                 inv.getExportJobId(),
+                inv.getPaymentMilestoneKey(),
                 new ClientSnapshotDto(
                         inv.getSnapCompanyName(),
                         inv.getSnapContactName(),

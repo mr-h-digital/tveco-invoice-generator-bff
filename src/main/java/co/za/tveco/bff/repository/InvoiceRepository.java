@@ -46,9 +46,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     long countByExportJobId(UUID exportJobId);
 
-    @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.exportJobId = :exportJobId")
-    BigDecimal sumTotalByExportJobId(@Param("exportJobId") UUID exportJobId);
+    @Query("SELECT COALESCE(SUM(i.subtotal), 0) FROM Invoice i WHERE i.exportJobId = :exportJobId")
+    BigDecimal sumSubtotalByExportJobId(@Param("exportJobId") UUID exportJobId);
 
-    @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.exportJobId = :exportJobId AND i.id <> :invoiceId")
-    BigDecimal sumTotalByExportJobIdAndIdNot(@Param("exportJobId") UUID exportJobId, @Param("invoiceId") UUID invoiceId);
+    @Query("SELECT COALESCE(SUM(i.subtotal), 0) FROM Invoice i WHERE i.exportJobId = :exportJobId AND i.id <> :invoiceId")
+    BigDecimal sumSubtotalByExportJobIdAndIdNot(@Param("exportJobId") UUID exportJobId, @Param("invoiceId") UUID invoiceId);
 }

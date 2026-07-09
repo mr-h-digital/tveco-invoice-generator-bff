@@ -106,216 +106,258 @@ class ExportJobsAndNotificationsApiIntegrationTest {
 
                 @Test
                 void invoiceCanLinkToExportJob() throws Exception {
-                                                                String authHeader = bearerToken();
-                                String createJobPayload = """
-                                                                {
-                                                                        "clientId": null,
-                                                                        "clientSnapshot": {
-                                                                                "companyName": "Kabila Muteba Enterprises",
-                                                                                "contactName": "Kabila Muteba",
-                                                                                "email": "kabila@example.zm",
-                                                                                "phone": "+260970000001"
-                                                                        },
-                                                                        "destinationCountry": "Zambia",
-                                                                        "vehicleDescription": "Toyota Land Cruiser 200",
-                                                                        "sourceChannel": "Website",
-                                                                        "projectValue": 52700,
-                                                                        "estimatedDepartureDate": "2026-07-12",
-                                                                        "estimatedArrivalDate": "2026-08-05",
-                                                                        "notes": "Linked invoice verification"
-                                                                }
-                                                                """;
+                        String authHeader = bearerToken();
+                        String createJobPayload = """
+                                {
+                                  "clientId": null,
+                                  "clientSnapshot": {
+                                    "companyName": "Kabila Muteba Enterprises",
+                                    "contactName": "Kabila Muteba",
+                                    "email": "kabila@example.zm",
+                                    "phone": "+260970000001"
+                                  },
+                                  "destinationCountry": "Zambia",
+                                  "vehicleDescription": "Toyota Land Cruiser 200",
+                                  "sourceChannel": "Website",
+                                  "projectValue": 52700,
+                                  "estimatedDepartureDate": "2026-07-12",
+                                  "estimatedArrivalDate": "2026-08-05",
+                                  "notes": "Linked invoice verification"
+                                }
+                                """;
 
-                                MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
-                                                                                                .header(AUTHORIZATION, authHeader)
-                                                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                                                .content(createJobPayload))
-                                                                .andExpect(status().isCreated())
-                                                                .andReturn();
+                        MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
+                                        .header(AUTHORIZATION, authHeader)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createJobPayload))
+                                .andExpect(status().isCreated())
+                                .andReturn();
 
-                                String exportJobId = objectMapper.readTree(createdJob.getResponse().getContentAsString())
-                                                                .get("data")
-                                                                .get("id")
-                                                                .asText();
+                        String exportJobId = objectMapper.readTree(createdJob.getResponse().getContentAsString())
+                                .get("data")
+                                .get("id")
+                                .asText();
 
-                                String createInvoicePayload = """
-                                                                {
-                                                                        "invoiceNumber": "TVECO-2026-901",
-                                                                        "status": "DRAFT",
-                                                                        "issueDate": "2026-07-01",
-                                                                        "dueDate": "2026-07-15",
-                                                                        "clientId": null,
-                                                                        "exportJobId": "%s",
-                                                                        "clientSnapshot": {
-                                                                                "companyName": "Kabila Muteba Enterprises",
-                                                                                "contactName": "Kabila Muteba",
-                                                                                "email": "kabila@example.zm",
-                                                                                "phone": "+260970000001",
-                                                                                "address": "Lusaka, Zambia"
-                                                                        },
-                                                                        "lineItems": [
-                                                                                {
-                                                                                        "name": "Vehicle sourcing",
-                                                                                        "description": "Sourcing and verification",
-                                                                                        "quantity": 1,
-                                                                                        "unitPrice": 52700,
-                                                                                        "sortOrder": 0
-                                                                                }
-                                                                        ],
-                                                                        "discountType": null,
-                                                                        "discountValue": 0,
-                                                                        "vatEnabled": false,
-                                                                        "vatRate": 0.15,
-                                                                        "notes": "Test invoice",
-                                                                        "paymentDetails": {
-                                                                                "bank": "FNB",
-                                                                                "accountName": "TVECO",
-                                                                                "accountNumber": "1234567890",
-                                                                                "accountType": "Business",
-                                                                                "branchCode": "250655",
-                                                                                "reference": "TVECO-2026-901"
-                                                                        }
-                                                                }
-                                                                """.formatted(exportJobId);
+                        String createInvoicePayload = """
+                                {
+                                  "invoiceNumber": "TVECO-2026-901",
+                                  "status": "DRAFT",
+                                  "issueDate": "2026-07-01",
+                                  "dueDate": "2026-07-15",
+                                  "clientId": null,
+                                  "exportJobId": "%s",
+                                  "clientSnapshot": {
+                                    "companyName": "Kabila Muteba Enterprises",
+                                    "contactName": "Kabila Muteba",
+                                    "email": "kabila@example.zm",
+                                    "phone": "+260970000001",
+                                    "address": "Lusaka, Zambia"
+                                  },
+                                  "lineItems": [
+                                    {
+                                      "name": "Vehicle sourcing",
+                                      "description": "Sourcing and verification",
+                                      "quantity": 1,
+                                      "unitPrice": 52700,
+                                      "sortOrder": 0
+                                    }
+                                  ],
+                                  "discountType": null,
+                                  "discountValue": 0,
+                                  "vatEnabled": false,
+                                  "vatRate": 0.15,
+                                  "notes": "Test invoice",
+                                  "paymentDetails": {
+                                    "bank": "FNB",
+                                    "accountName": "TVECO",
+                                    "accountNumber": "1234567890",
+                                    "accountType": "Business",
+                                    "branchCode": "250655",
+                                    "reference": "TVECO-2026-901"
+                                  }
+                                }
+                                """.formatted(exportJobId);
 
-                                mockMvc.perform(post("/api/invoices")
-                                                                                                .header(AUTHORIZATION, authHeader)
-                                                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                                                .content(createInvoicePayload))
-                                                                .andExpect(status().isCreated())
-                                                                .andExpect(jsonPath("$.success").value(true))
-                                                                .andExpect(jsonPath("$.data.exportJobId").value(exportJobId))
-                                                                .andExpect(jsonPath("$.data.total").value(52700));
+                        mockMvc.perform(post("/api/invoices")
+                                        .header(AUTHORIZATION, authHeader)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createInvoicePayload))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.exportJobId").value(exportJobId))
+                                .andExpect(jsonPath("$.data.total").value(52700));
                 }
 
-                                @Test
-                                void linkedInvoiceTotalsCannotExceedExportJobPaymentMilestones() throws Exception {
-                                                String authHeader = bearerToken();
-                                                String createJobPayload = """
-                                                                                {
-                                                                                        "clientId": null,
-                                                                                        "clientSnapshot": {
-                                                                                                "companyName": "Kabila Muteba Enterprises",
-                                                                                                "contactName": "Kabila Muteba",
-                                                                                                "email": "kabila@example.zm",
-                                                                                                "phone": "+260970000001"
-                                                                                        },
-                                                                                        "destinationCountry": "Zambia",
-                                                                                        "vehicleDescription": "Toyota Land Cruiser 200",
-                                                                                        "sourceChannel": "Website",
-                                                                                        "projectValue": 52700,
-                                                                                        "estimatedDepartureDate": "2026-07-12",
-                                                                                        "estimatedArrivalDate": "2026-08-05",
-                                                                                        "notes": "Linked invoice budget guard"
-                                                                                }
-                                                                                """;
-
-                                                MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
-                                                                                                                .header(AUTHORIZATION, authHeader)
-                                                                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                                                                .content(createJobPayload))
-                                                                                .andExpect(status().isCreated())
-                                                                                .andReturn();
-
-                                                String exportJobId = objectMapper.readTree(createdJob.getResponse().getContentAsString())
-                                                                                .get("data")
-                                                                                .get("id")
-                                                                                .asText();
-
-                                                String firstInvoicePayload = """
-                                                                                {
-                                                                                        "invoiceNumber": "TVECO-2026-910",
-                                                                                        "status": "DRAFT",
-                                                                                        "issueDate": "2026-07-01",
-                                                                                        "dueDate": "2026-07-15",
-                                                                                        "clientId": null,
-                                                                                        "exportJobId": "%s",
-                                                                                        "clientSnapshot": {
-                                                                                                "companyName": "Kabila Muteba Enterprises",
-                                                                                                "contactName": "Kabila Muteba",
-                                                                                                "email": "kabila@example.zm",
-                                                                                                "phone": "+260970000001",
-                                                                                                "address": "Lusaka, Zambia"
-                                                                                        },
-                                                                                        "lineItems": [
-                                                                                                {
-                                                                                                        "name": "Deposit",
-                                                                                                        "description": "Initial payment",
-                                                                                                        "quantity": 1,
-                                                                                                        "unitPrice": 40000,
-                                                                                                        "sortOrder": 0
-                                                                                                }
-                                                                                        ],
-                                                                                        "discountType": null,
-                                                                                        "discountValue": 0,
-                                                                                        "vatEnabled": false,
-                                                                                        "vatRate": 0.15,
-                                                                                        "notes": "First linked invoice",
-                                                                                        "paymentDetails": {
-                                                                                                "bank": "FNB",
-                                                                                                "accountName": "TVECO",
-                                                                                                "accountNumber": "1234567890",
-                                                                                                "accountType": "Business",
-                                                                                                "branchCode": "250655",
-                                                                                                "reference": "TVECO-2026-910"
-                                                                                        }
-                                                                                }
-                                                                                """.formatted(exportJobId);
-
-                                                mockMvc.perform(post("/api/invoices")
-                                                                                                                .header(AUTHORIZATION, authHeader)
-                                                                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                                                                .content(firstInvoicePayload))
-                                                                                .andExpect(status().isCreated())
-                                                                                .andExpect(jsonPath("$.success").value(true));
-
-                                                String secondInvoicePayload = """
-                                                                                {
-                                                                                        "invoiceNumber": "TVECO-2026-911",
-                                                                                        "status": "DRAFT",
-                                                                                        "issueDate": "2026-07-05",
-                                                                                        "dueDate": "2026-07-19",
-                                                                                        "clientId": null,
-                                                                                        "exportJobId": "%s",
-                                                                                        "clientSnapshot": {
-                                                                                                "companyName": "Kabila Muteba Enterprises",
-                                                                                                "contactName": "Kabila Muteba",
-                                                                                                "email": "kabila@example.zm",
-                                                                                                "phone": "+260970000001",
-                                                                                                "address": "Lusaka, Zambia"
-                                                                                        },
-                                                                                        "lineItems": [
-                                                                                                {
-                                                                                                        "name": "Balance",
-                                                                                                        "description": "Final payment",
-                                                                                                        "quantity": 1,
-                                                                                                        "unitPrice": 20000,
-                                                                                                        "sortOrder": 0
-                                                                                                }
-                                                                                        ],
-                                                                                        "discountType": null,
-                                                                                        "discountValue": 0,
-                                                                                        "vatEnabled": false,
-                                                                                        "vatRate": 0.15,
-                                                                                        "notes": "Second linked invoice",
-                                                                                        "paymentDetails": {
-                                                                                                "bank": "FNB",
-                                                                                                "accountName": "TVECO",
-                                                                                                "accountNumber": "1234567890",
-                                                                                                "accountType": "Business",
-                                                                                                "branchCode": "250655",
-                                                                                                "reference": "TVECO-2026-911"
-                                                                                        }
-                                                                                }
-                                                                                """.formatted(exportJobId);
-
-                                                mockMvc.perform(post("/api/invoices")
-                                                                                                                .header(AUTHORIZATION, authHeader)
-                                                                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                                                                .content(secondInvoicePayload))
-                                                                                .andExpect(status().isConflict())
-                                                                                .andExpect(jsonPath("$.success").value(false));
+                @Test
+                void invoiceCanLinkToPaymentMilestoneAndStillApplyDiscount() throws Exception {
+                        String authHeader = bearerToken();
+                        String createJobPayload = """
+                                {
+                                  "clientId": null,
+                                  "clientSnapshot": {
+                                    "companyName": "Kabila Muteba Enterprises",
+                                    "contactName": "Kabila Muteba",
+                                    "email": "kabila@example.zm",
+                                    "phone": "+260970000001"
+                                  },
+                                  "destinationCountry": "Zambia",
+                                  "vehicleDescription": "Toyota Land Cruiser 200",
+                                  "sourceChannel": "Website",
+                                  "projectValue": 52700,
+                                  "estimatedDepartureDate": "2026-07-12",
+                                  "estimatedArrivalDate": "2026-08-05",
+                                  "notes": "Discount-safe milestone billing"
                                 }
+                                """;
+
+                        MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
+                                        .header(AUTHORIZATION, authHeader)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createJobPayload))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                        String exportJobId = objectMapper.readTree(createdJob.getResponse().getContentAsString())
+                                .get("data")
+                                .get("id")
+                                .asText();
+
+                        String createInvoicePayload = """
+                                {
+                                  "invoiceNumber": "TVECO-2026-912",
+                                  "status": "DRAFT",
+                                  "issueDate": "2026-07-01",
+                                  "dueDate": "2026-07-15",
+                                  "clientId": null,
+                                  "exportJobId": "%s",
+                                  "paymentMilestoneKey": "deposit",
+                                  "clientSnapshot": {
+                                    "companyName": "Kabila Muteba Enterprises",
+                                    "contactName": "Kabila Muteba",
+                                    "email": "kabila@example.zm",
+                                    "phone": "+260970000001",
+                                    "address": "Lusaka, Zambia"
+                                  },
+                                  "lineItems": [
+                                    {
+                                      "name": "Deposit",
+                                      "description": "Milestone invoice with discount",
+                                      "quantity": 1,
+                                      "unitPrice": 15810,
+                                      "sortOrder": 0
+                                    }
+                                  ],
+                                  "discountType": "PERCENT",
+                                  "discountValue": 10,
+                                  "vatEnabled": false,
+                                  "vatRate": 0.15,
+                                  "notes": "10 percent discount applied after milestone correspondence",
+                                  "paymentDetails": {
+                                    "bank": "FNB",
+                                    "accountName": "TVECO",
+                                    "accountNumber": "1234567890",
+                                    "accountType": "Business",
+                                    "branchCode": "250655",
+                                    "reference": "TVECO-2026-912"
+                                  }
+                                }
+                                """.formatted(exportJobId);
+
+                        mockMvc.perform(post("/api/invoices")
+                                        .header(AUTHORIZATION, authHeader)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createInvoicePayload))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.exportJobId").value(exportJobId))
+                                .andExpect(jsonPath("$.data.paymentMilestoneKey").value("deposit"))
+                                .andExpect(jsonPath("$.data.subtotal").value(15810))
+                                .andExpect(jsonPath("$.data.discountAmount").value(1581))
+                                .andExpect(jsonPath("$.data.total").value(14229));
+                }
+
+                @Test
+                void invoiceLinkedToMilestoneMustMatchMilestoneSubtotal() throws Exception {
+                        String authHeader = bearerToken();
+                        String createJobPayload = """
+                                {
+                                  "clientId": null,
+                                  "clientSnapshot": {
+                                    "companyName": "Kabila Muteba Enterprises",
+                                    "contactName": "Kabila Muteba",
+                                    "email": "kabila@example.zm",
+                                    "phone": "+260970000001"
+                                  },
+                                  "destinationCountry": "Zambia",
+                                  "vehicleDescription": "Toyota Land Cruiser 200",
+                                  "sourceChannel": "Website",
+                                  "projectValue": 52700,
+                                  "estimatedDepartureDate": "2026-07-12",
+                                  "estimatedArrivalDate": "2026-08-05",
+                                  "notes": "Milestone mismatch guard"
+                                }
+                                """;
+
+                        MvcResult createdJob = mockMvc.perform(post("/api/export-jobs")
+                                        .header(AUTHORIZATION, authHeader)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createJobPayload))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                        String exportJobId = objectMapper.readTree(createdJob.getResponse().getContentAsString())
+                                .get("data")
+                                .get("id")
+                                .asText();
+
+                        String createInvoicePayload = """
+                                {
+                                  "invoiceNumber": "TVECO-2026-913",
+                                  "status": "DRAFT",
+                                  "issueDate": "2026-07-01",
+                                  "dueDate": "2026-07-15",
+                                  "clientId": null,
+                                  "exportJobId": "%s",
+                                  "paymentMilestoneKey": "deposit",
+                                  "clientSnapshot": {
+                                    "companyName": "Kabila Muteba Enterprises",
+                                    "contactName": "Kabila Muteba",
+                                    "email": "kabila@example.zm",
+                                    "phone": "+260970000001",
+                                    "address": "Lusaka, Zambia"
+                                  },
+                                  "lineItems": [
+                                    {
+                                      "name": "Deposit",
+                                      "description": "Mismatch test",
+                                      "quantity": 1,
+                                      "unitPrice": 15000,
+                                      "sortOrder": 0
+                                    }
+                                  ],
+                                  "discountType": "PERCENT",
+                                  "discountValue": 10,
+                                  "vatEnabled": false,
+                                  "vatRate": 0.15,
+                                  "notes": "This should fail",
+                                  "paymentDetails": {
+                                    "bank": "FNB",
+                                    "accountName": "TVECO",
+                                    "accountNumber": "1234567890",
+                                    "accountType": "Business",
+                                    "branchCode": "250655",
+                                    "reference": "TVECO-2026-913"
+                                  }
+                                }
+                                """.formatted(exportJobId);
+
+                        mockMvc.perform(post("/api/invoices")
+                                        .header(AUTHORIZATION, authHeader)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createInvoicePayload))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.success").value(false));
+                }
 
     @Test
     void exportJobLifecycle_create_patch_tracking_delete() throws Exception {

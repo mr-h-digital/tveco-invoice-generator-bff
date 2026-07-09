@@ -28,6 +28,8 @@ public record InvoiceRequest(
 
         UUID exportJobId,
 
+        String paymentMilestoneKey,
+
         @NotNull @Valid
         ClientSnapshotDto clientSnapshot,
 

@@ -14,6 +14,7 @@ public record InvoiceDto(
         LocalDate dueDate,
         UUID clientId,
         UUID exportJobId,
+        String paymentMilestoneKey,
         ClientSnapshotDto clientSnapshot,
         List<LineItemDto> lineItems,
         BigDecimal subtotal,
