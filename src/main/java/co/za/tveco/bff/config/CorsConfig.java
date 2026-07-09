@@ -9,6 +9,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Configuration
 public class CorsConfig {
@@ -18,9 +19,22 @@ public class CorsConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        List<String> normalizedOrigins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isEmpty())
+        // Always include first-party TVECO origins even if env var formatting is incorrect.
+        List<String> coreOrigins = List.of(
+            "https://tveco.co.za",
+            "https://www.tveco.co.za",
+            "https://app.tveco.co.za",
+            "http://localhost:5173",
+            "http://localhost:4173"
+        );
+
+        List<String> configuredOrigins = Arrays.stream(allowedOrigins.split(","))
+            .map(origin -> origin.replace("\"", "").trim())
+            .filter(origin -> !origin.isEmpty() && !"null".equalsIgnoreCase(origin))
+            .toList();
+
+        List<String> normalizedOrigins = Stream.concat(coreOrigins.stream(), configuredOrigins.stream())
+            .distinct()
                 .toList();
 
         CorsConfiguration configuration = new CorsConfiguration();
