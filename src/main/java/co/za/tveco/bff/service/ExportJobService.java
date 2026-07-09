@@ -95,7 +95,7 @@ public class ExportJobService {
                 .status("ENQUIRY")
                 .milestones(writeJson(defaultMilestones(issueDate)))
                 .documents(writeJson(defaultDocuments()))
-                .paymentMilestones(writeJson(buildPaymentMilestones(projectValue, issueDate)))
+                .paymentMilestones(writeJson(buildPaymentMilestones(projectValue, issueDate, req.depositPercent(), req.shippingPercent(), req.balancePercent())))
                 .vaultDocuments(writeJson(objectMapper.createArrayNode()))
                 .estimatedDepartureDate(departure)
                 .estimatedArrivalDate(arrival)
@@ -295,16 +295,42 @@ public class ExportJobService {
         return n;
     }
 
-    private ArrayNode buildPaymentMilestones(BigDecimal projectValue, LocalDate issueDate) {
-        BigDecimal deposit = projectValue.multiply(BigDecimal.valueOf(0.30)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal shipping = projectValue.multiply(BigDecimal.valueOf(0.40)).setScale(2, RoundingMode.HALF_UP);
+    private ArrayNode buildPaymentMilestones(BigDecimal projectValue, LocalDate issueDate, BigDecimal depositPercent, BigDecimal shippingPercent, BigDecimal balancePercent) {
+        BigDecimal resolvedDepositPercent = depositPercent == null && shippingPercent == null && balancePercent == null
+                ? BigDecimal.valueOf(30)
+                : requirePositivePercent("depositPercent", depositPercent);
+        BigDecimal resolvedShippingPercent = depositPercent == null && shippingPercent == null && balancePercent == null
+                ? BigDecimal.valueOf(40)
+                : requirePositivePercent("shippingPercent", shippingPercent);
+        BigDecimal resolvedBalancePercent = depositPercent == null && shippingPercent == null && balancePercent == null
+                ? BigDecimal.valueOf(30)
+                : requirePositivePercent("balancePercent", balancePercent);
+
+        BigDecimal totalPercent = resolvedDepositPercent.add(resolvedShippingPercent).add(resolvedBalancePercent);
+        if (totalPercent.compareTo(BigDecimal.valueOf(100)) != 0) {
+            throw new IllegalArgumentException("Payment milestone percentages must total 100");
+        }
+
+        BigDecimal deposit = projectValue.multiply(resolvedDepositPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal shipping = projectValue.multiply(resolvedShippingPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         BigDecimal balance = projectValue.subtract(deposit).subtract(shipping).setScale(2, RoundingMode.HALF_UP);
 
         ArrayNode arr = objectMapper.createArrayNode();
-        arr.add(paymentMilestone("deposit", "Deposit (30%)", deposit, issueDate));
-        arr.add(paymentMilestone("shipping", "Shipping Payment (40%)", shipping, issueDate.plusDays(10)));
-        arr.add(paymentMilestone("balance", "Final Balance (30%)", balance, issueDate.plusDays(28)));
+        arr.add(paymentMilestone("deposit", "Deposit (" + resolvedDepositPercent.stripTrailingZeros().toPlainString() + "%)", deposit, issueDate));
+        arr.add(paymentMilestone("shipping", "Shipping Payment (" + resolvedShippingPercent.stripTrailingZeros().toPlainString() + "%)", shipping, issueDate.plusDays(10)));
+        arr.add(paymentMilestone("balance", "Final Balance (" + resolvedBalancePercent.stripTrailingZeros().toPlainString() + "%)", balance, issueDate.plusDays(28)));
         return arr;
+    }
+
+    private BigDecimal requirePositivePercent(String fieldName, BigDecimal value) {
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " is required when customizing payment milestones");
+        }
+        BigDecimal normalized = value.setScale(2, RoundingMode.HALF_UP);
+        if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(fieldName + " must be greater than 0");
+        }
+        return normalized;
     }
 
     private ObjectNode paymentMilestone(String key, String label, BigDecimal amount, LocalDate dueDate) {

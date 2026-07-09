@@ -29,6 +29,10 @@ public record ExportJobCreateRequest(
         @DecimalMin(value = "0.01", message = "projectValue must be greater than 0")
         BigDecimal projectValue,
 
+        BigDecimal depositPercent,
+        BigDecimal shippingPercent,
+        BigDecimal balancePercent,
+
         String estimatedDepartureDate,
         String estimatedArrivalDate,
         String notes

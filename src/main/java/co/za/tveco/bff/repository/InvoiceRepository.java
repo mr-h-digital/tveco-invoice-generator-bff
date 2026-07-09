@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,4 +45,10 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     long countByStatus(@Param("status") String status);
 
     long countByExportJobId(UUID exportJobId);
+
+    @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.exportJobId = :exportJobId")
+    BigDecimal sumTotalByExportJobId(@Param("exportJobId") UUID exportJobId);
+
+    @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.exportJobId = :exportJobId AND i.id <> :invoiceId")
+    BigDecimal sumTotalByExportJobIdAndIdNot(@Param("exportJobId") UUID exportJobId, @Param("invoiceId") UUID invoiceId);
 }

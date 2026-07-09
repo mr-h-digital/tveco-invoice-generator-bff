@@ -1,10 +1,13 @@
 package co.za.tveco.bff.service;
 
 import co.za.tveco.bff.dto.*;
+import co.za.tveco.bff.entity.ExportJob;
 import co.za.tveco.bff.entity.Invoice;
 import co.za.tveco.bff.entity.LineItem;
 import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import co.za.tveco.bff.repository.ExportJobRepository;
 import co.za.tveco.bff.repository.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,7 @@ public class InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final ExportJobRepository exportJobRepository;
+    private final ObjectMapper objectMapper;
 
     // ── Read ─────────────────────────────────────────────────────────────────
 
@@ -52,8 +56,8 @@ public class InvoiceService {
         if (invoiceRepository.existsByInvoiceNumber(req.invoiceNumber())) {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' already exists");
         }
-        validateExportJobId(req.exportJobId());
         Invoice invoice = buildInvoice(new Invoice(), req);
+        validateExportJobInvoiceBudget(req.exportJobId(), invoice.getTotal(), null);
         return toDto(invoiceRepository.save(invoice));
     }
 
@@ -63,9 +67,9 @@ public class InvoiceService {
         if (invoiceRepository.existsByInvoiceNumberAndIdNot(req.invoiceNumber(), id)) {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' is already used by another invoice");
         }
-        validateExportJobId(req.exportJobId());
         invoice.getLineItems().clear();
         buildInvoice(invoice, req);
+        validateExportJobInvoiceBudget(req.exportJobId(), invoice.getTotal(), id);
         return toDto(invoiceRepository.save(invoice));
     }
 
@@ -205,12 +209,50 @@ public class InvoiceService {
         return s == null ? "" : s;
     }
 
-    private void validateExportJobId(UUID exportJobId) {
+    private void validateExportJobInvoiceBudget(UUID exportJobId, BigDecimal invoiceTotal, UUID invoiceIdToExclude) {
         if (exportJobId == null) {
             return;
         }
-        if (!exportJobRepository.existsById(exportJobId)) {
-            throw new ResourceNotFoundException("Export job not found: " + exportJobId);
+
+        ExportJob exportJob = exportJobRepository.findById(exportJobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Export job not found: " + exportJobId));
+
+        BigDecimal allowedTotal = resolveAllowedTotal(exportJob);
+        BigDecimal existingTotal = invoiceIdToExclude == null
+                ? invoiceRepository.sumTotalByExportJobId(exportJobId)
+                : invoiceRepository.sumTotalByExportJobIdAndIdNot(exportJobId, invoiceIdToExclude);
+
+        BigDecimal nextTotal = existingTotal.add(invoiceTotal);
+        if (nextTotal.compareTo(allowedTotal) > 0) {
+            throw new ConflictException(
+                    "Linked invoice totals exceed export job payment milestones total (%s > %s)"
+                            .formatted(nextTotal.stripTrailingZeros().toPlainString(), allowedTotal.stripTrailingZeros().toPlainString())
+            );
+        }
+    }
+
+    private BigDecimal resolveAllowedTotal(ExportJob exportJob) {
+        try {
+            JsonNode root = objectMapper.readTree(exportJob.getPaymentMilestones());
+            if (!root.isArray()) {
+                return exportJob.getProjectValue();
+            }
+
+            BigDecimal sum = BigDecimal.ZERO;
+            for (JsonNode node : root) {
+                JsonNode amountNode = node.get("amount");
+                if (amountNode == null || amountNode.isNull()) {
+                    continue;
+                }
+                sum = sum.add(amountNode.decimalValue());
+            }
+
+            if (sum.compareTo(BigDecimal.ZERO) <= 0) {
+                return exportJob.getProjectValue();
+            }
+            return sum;
+        } catch (Exception ignored) {
+            return exportJob.getProjectValue();
         }
     }
 

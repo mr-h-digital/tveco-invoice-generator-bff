@@ -91,6 +91,36 @@ class ExportJobServiceTest {
     }
 
     @Test
+    void create_shouldUseCustomPaymentSplitWhenProvided() {
+        when(exportJobRepository.findByJobNumberStartingWith(any())).thenReturn(java.util.List.of());
+        when(exportJobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var request = new co.za.tveco.bff.dto.ExportJobCreateRequest(
+                null,
+                new co.za.tveco.bff.dto.ExportJobClientSnapshotDto("ACME", "Jane Doe", "jane@example.com", "+27110000000"),
+                "Namibia",
+                "Toyota Land Cruiser 300",
+                "Website",
+                BigDecimal.valueOf(100000),
+                BigDecimal.valueOf(25),
+                BigDecimal.valueOf(50),
+                BigDecimal.valueOf(25),
+                null,
+                null,
+                "Custom split"
+        );
+
+        var created = exportJobService.create(request);
+
+        assertThat(created.paymentMilestones().get(0).get("label").asText()).contains("25%");
+        assertThat(created.paymentMilestones().get(1).get("label").asText()).contains("50%");
+        assertThat(created.paymentMilestones().get(2).get("label").asText()).contains("25%");
+        assertThat(created.paymentMilestones().get(0).get("amount").asText()).isEqualTo("25000.00");
+        assertThat(created.paymentMilestones().get(1).get("amount").asText()).isEqualTo("50000.00");
+        assertThat(created.paymentMilestones().get(2).get("amount").asText()).isEqualTo("25000.00");
+    }
+
+    @Test
     void delete_shouldRejectJobsWithLinkedInvoices() {
         ExportJob job = sampleJob("ENQUIRY");
         when(exportJobRepository.findById(job.getId())).thenReturn(Optional.of(job));
