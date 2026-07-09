@@ -30,6 +30,9 @@ public class AppUser {
     @Column(name = "role", nullable = false)
     private String role;
 
+    @Column(name = "client_id")
+    private UUID clientId;
+
     @Column(name = "is_active", nullable = false)
     private boolean active;
 

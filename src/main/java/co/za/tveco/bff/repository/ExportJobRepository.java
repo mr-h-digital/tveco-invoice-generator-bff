@@ -12,4 +12,8 @@ public interface ExportJobRepository extends JpaRepository<ExportJob, UUID> {
     Optional<ExportJob> findByPublicTrackingTokenIgnoreCase(String token);
 
     List<ExportJob> findByJobNumberStartingWith(String prefix);
+
+    List<ExportJob> findByClientIdOrderByCreatedAtDesc(UUID clientId);
+
+    Optional<ExportJob> findByIdAndClientId(UUID id, UUID clientId);
 }

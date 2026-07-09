@@ -3,6 +3,7 @@ package co.za.tveco.bff.controller;
 import co.za.tveco.bff.dto.ApiResponse;
 import co.za.tveco.bff.dto.AuthLoginRequest;
 import co.za.tveco.bff.dto.AuthLoginResponse;
+import co.za.tveco.bff.dto.AuthSignupRequest;
 import co.za.tveco.bff.dto.AuthTokens;
 import co.za.tveco.bff.exception.UnauthorizedException;
 import co.za.tveco.bff.security.RefreshTokenCookieService;
@@ -31,6 +32,20 @@ public class AuthController {
         return ApiResponse.of(new AuthLoginResponse(
                 tokens.email(),
                 tokens.role(),
+                tokens.clientId(),
+                tokens.accessToken(),
+                tokens.expiresInSeconds()
+        ));
+    }
+
+    @PostMapping("/signup")
+    public ApiResponse<AuthLoginResponse> signup(@Valid @RequestBody AuthSignupRequest req, HttpServletResponse response) {
+        AuthTokens tokens = authService.signup(req);
+        refreshTokenCookieService.writeRefreshTokenCookie(response, tokens.refreshToken(), tokens.refreshExpiresInSeconds());
+        return ApiResponse.of(new AuthLoginResponse(
+                tokens.email(),
+                tokens.role(),
+                tokens.clientId(),
                 tokens.accessToken(),
                 tokens.expiresInSeconds()
         ));
@@ -47,6 +62,7 @@ public class AuthController {
         return ApiResponse.of(new AuthLoginResponse(
                 tokens.email(),
                 tokens.role(),
+            tokens.clientId(),
                 tokens.accessToken(),
                 tokens.expiresInSeconds()
         ));

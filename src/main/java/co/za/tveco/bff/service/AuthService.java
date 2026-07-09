@@ -1,11 +1,15 @@
 package co.za.tveco.bff.service;
 
 import co.za.tveco.bff.dto.AuthLoginRequest;
+import co.za.tveco.bff.dto.AuthSignupRequest;
 import co.za.tveco.bff.dto.AuthTokens;
 import co.za.tveco.bff.entity.AppUser;
+import co.za.tveco.bff.entity.Client;
 import co.za.tveco.bff.entity.RefreshTokenSession;
+import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.UnauthorizedException;
 import co.za.tveco.bff.repository.AppUserRepository;
+import co.za.tveco.bff.repository.ClientRepository;
 import co.za.tveco.bff.repository.RefreshTokenSessionRepository;
 import co.za.tveco.bff.security.JwtService;
 import io.jsonwebtoken.JwtException;
@@ -24,20 +28,50 @@ public class AuthService {
     private static final String INVALID_REFRESH_TOKEN_MESSAGE = "Invalid refresh token";
 
     private final AppUserRepository appUserRepository;
+    private final ClientRepository clientRepository;
     private final RefreshTokenSessionRepository refreshTokenSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public AuthService(
             AppUserRepository appUserRepository,
+            ClientRepository clientRepository,
             RefreshTokenSessionRepository refreshTokenSessionRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService
     ) {
         this.appUserRepository = appUserRepository;
+        this.clientRepository = clientRepository;
         this.refreshTokenSessionRepository = refreshTokenSessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+    }
+
+    @Transactional
+    public AuthTokens signup(AuthSignupRequest req) {
+        String incomingEmail = req.email().trim().toLowerCase(Locale.ROOT);
+        if (appUserRepository.existsByEmailIgnoreCase(incomingEmail)) {
+            throw new ConflictException("An account with this email already exists");
+        }
+
+        Client client = clientRepository.findByEmailIgnoreCase(incomingEmail)
+                .orElseGet(() -> clientRepository.save(Client.builder()
+                        .companyName(req.companyName().trim())
+                        .contactName(req.contactName().trim())
+                        .email(incomingEmail)
+                        .phone(req.phone().trim())
+                        .address(req.address().trim())
+                        .build()));
+
+        AppUser user = appUserRepository.save(AppUser.builder()
+                .email(incomingEmail)
+                .passwordHash(passwordEncoder.encode(req.password()))
+                .role("client")
+                .clientId(client.getId())
+                .active(true)
+                .build());
+
+        return issueTokens(user);
     }
 
     @Transactional
@@ -124,6 +158,7 @@ public class AuthService {
         return new AuthTokens(
                 user.getEmail(),
                 user.getRole(),
+            user.getClientId(),
                 jwtService.generateAccessToken(user.getEmail(), user.getRole()),
                 jwtService.getAccessExpirationSeconds(),
                 jwtService.generateRefreshToken(user.getEmail(), user.getRole(), refreshTokenId),
