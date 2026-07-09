@@ -13,6 +13,8 @@ import co.za.tveco.bff.repository.ClientRepository;
 import co.za.tveco.bff.repository.RefreshTokenSessionRepository;
 import co.za.tveco.bff.security.JwtService;
 import io.jsonwebtoken.JwtException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,8 @@ import java.util.UUID;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid email or password";
     private static final String INVALID_REFRESH_TOKEN_MESSAGE = "Invalid refresh token";
@@ -51,6 +55,7 @@ public class AuthService {
     public AuthTokens signup(AuthSignupRequest req) {
         String incomingEmail = req.email().trim().toLowerCase(Locale.ROOT);
         if (appUserRepository.existsByEmailIgnoreCase(incomingEmail)) {
+            log.warn("Auth signup rejected: duplicate email={} ", incomingEmail);
             throw new ConflictException("An account with this email already exists");
         }
 
@@ -71,6 +76,7 @@ public class AuthService {
                 .active(true)
                 .build());
 
+        log.info("Auth signup success email={} role={} clientId={}", user.getEmail(), user.getRole(), user.getClientId());
         return issueTokens(user);
     }
 
@@ -79,12 +85,17 @@ public class AuthService {
         String incomingEmail = req.email().trim().toLowerCase(Locale.ROOT);
         AppUser user = appUserRepository.findByEmailIgnoreCase(incomingEmail)
                 .filter(AppUser::isActive)
-                .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE));
+                .orElseThrow(() -> {
+                    log.warn("Auth login rejected: unknown/inactive email={}", incomingEmail);
+                    return new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+                });
 
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            log.warn("Auth login rejected: invalid password email={}", incomingEmail);
             throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
         }
 
+        log.info("Auth login success email={} role={} clientId={}", user.getEmail(), user.getRole(), user.getClientId());
         return issueTokens(user);
     }
 
@@ -119,6 +130,7 @@ public class AuthService {
 
             return issueTokens(user);
         } catch (JwtException | IllegalArgumentException ex) {
+            log.warn("Auth refresh rejected: invalid refresh token");
             throw new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE);
         }
     }
@@ -140,6 +152,7 @@ public class AuthService {
                 }
             });
         } catch (JwtException | IllegalArgumentException ignored) {
+            log.debug("Auth logout received invalid refresh token");
             // Logout should be idempotent, even when token is missing/invalid.
         }
     }

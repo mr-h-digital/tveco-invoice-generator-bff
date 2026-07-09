@@ -31,6 +31,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("success", false, "message", ex.getMessage()));
     }
 
+        @ExceptionHandler(TooManyRequestsException.class)
+        public ResponseEntity<Map<String, Object>> handleTooManyRequests(TooManyRequestsException ex) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                                .body(Map.of("success", false, "message", ex.getMessage()));
+        }
+
         @ExceptionHandler(ForbiddenException.class)
         public ResponseEntity<Map<String, Object>> handleForbidden(ForbiddenException ex) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
