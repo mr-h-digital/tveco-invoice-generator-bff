@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -57,7 +58,7 @@ public class InvoiceService {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' already exists");
         }
         Invoice invoice = buildInvoice(new Invoice(), req);
-        validateExportJobInvoiceBudget(req.exportJobId(), req.paymentMilestoneKey(), invoice.getSubtotal(), null);
+        validateExportJobInvoiceBudget(req.exportJobId(), req.paymentMilestoneKey(), invoice.getSubtotal(), null, null, null, null);
         return toDto(invoiceRepository.save(invoice));
     }
 
@@ -67,9 +68,22 @@ public class InvoiceService {
         if (invoiceRepository.existsByInvoiceNumberAndIdNot(req.invoiceNumber(), id)) {
             throw new ConflictException("Invoice number '" + req.invoiceNumber() + "' is already used by another invoice");
         }
+
+        UUID originalExportJobId = invoice.getExportJobId();
+        String originalMilestoneKey = normalizeScopeKey(invoice.getPaymentMilestoneKey());
+        BigDecimal originalSubtotal = scaleAmount(invoice.getSubtotal());
+
         invoice.getLineItems().clear();
         buildInvoice(invoice, req);
-        validateExportJobInvoiceBudget(req.exportJobId(), req.paymentMilestoneKey(), invoice.getSubtotal(), id);
+        validateExportJobInvoiceBudget(
+                req.exportJobId(),
+                req.paymentMilestoneKey(),
+                invoice.getSubtotal(),
+                id,
+                originalExportJobId,
+                originalMilestoneKey,
+                originalSubtotal
+        );
         return toDto(invoiceRepository.save(invoice));
     }
 
@@ -211,16 +225,37 @@ public class InvoiceService {
         return s == null ? "" : s;
     }
 
-    private void validateExportJobInvoiceBudget(UUID exportJobId, String paymentMilestoneKey, BigDecimal invoiceSubtotal, UUID invoiceIdToExclude) {
+    private void validateExportJobInvoiceBudget(
+            UUID exportJobId,
+            String paymentMilestoneKey,
+            BigDecimal invoiceSubtotal,
+            UUID invoiceIdToExclude,
+            UUID originalExportJobId,
+            String originalMilestoneKey,
+            BigDecimal originalSubtotal
+    ) {
         if (exportJobId == null) {
+            return;
+        }
+
+        BigDecimal normalizedSubtotal = scaleAmount(invoiceSubtotal);
+        String normalizedMilestoneKey = normalizeScopeKey(paymentMilestoneKey);
+
+        // Backward compatibility: allow metadata/status edits on existing legacy invoices
+        // that were linked before strict subtotal correspondence was introduced.
+        boolean unchangedExistingLinkedInvoice = invoiceIdToExclude != null
+                && Objects.equals(originalExportJobId, exportJobId)
+                && Objects.equals(originalMilestoneKey, normalizedMilestoneKey)
+                && originalSubtotal != null
+                && normalizedSubtotal.compareTo(originalSubtotal) == 0;
+        if (unchangedExistingLinkedInvoice) {
             return;
         }
 
         ExportJob exportJob = exportJobRepository.findById(exportJobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Export job not found: " + exportJobId));
 
-        BigDecimal allowedSubtotal = resolveAllowedSubtotal(exportJob, paymentMilestoneKey);
-        BigDecimal normalizedSubtotal = invoiceSubtotal.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal allowedSubtotal = resolveAllowedSubtotal(exportJob, normalizedMilestoneKey);
         if (normalizedSubtotal.compareTo(allowedSubtotal) != 0) {
             throw new ConflictException(
                     "Invoice subtotal must match the linked export job amount (%s != %s)"
@@ -239,6 +274,20 @@ public class InvoiceService {
                             .formatted(nextSubtotal.stripTrailingZeros().toPlainString(), exportJob.getProjectValue().stripTrailingZeros().toPlainString())
             );
         }
+    }
+
+    private String normalizeScopeKey(String paymentMilestoneKey) {
+        if (paymentMilestoneKey == null || paymentMilestoneKey.isBlank()) {
+            return null;
+        }
+        return paymentMilestoneKey.trim();
+    }
+
+    private BigDecimal scaleAmount(BigDecimal amount) {
+        if (amount == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolveAllowedSubtotal(ExportJob exportJob, String paymentMilestoneKey) {
