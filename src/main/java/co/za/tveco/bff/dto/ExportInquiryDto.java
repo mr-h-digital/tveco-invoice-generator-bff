@@ -1,33 +1,30 @@
 package co.za.tveco.bff.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
-public record ExportJobDto(
+public record ExportInquiryDto(
         UUID id,
-        String jobNumber,
-        String publicTrackingToken,
+        String inquiryNumber,
         UUID clientId,
-        UUID quoteId,
-        UUID inquiryId,
-        JsonNode clientSnapshot,
+        String inquiryType,
+        String status,
+        String sourceChannel,
         String destinationCountry,
         String vehicleDescription,
-        String sourceChannel,
         BigDecimal projectValue,
-        String status,
-        JsonNode milestones,
-        JsonNode documents,
-        JsonNode paymentMilestones,
-        JsonNode vaultDocuments,
         LocalDate estimatedDepartureDate,
         LocalDate estimatedArrivalDate,
         String notes,
-        String cancellationReason,
+        List<ExportInquiryMessageDto> messages,
+        UUID linkedQuoteId,
+        String linkedQuoteNumber,
+        String linkedQuoteStatus,
+        UUID linkedExportJobId,
+        String linkedExportJobNumber,
         Instant createdAt,
         Instant updatedAt
 ) {}

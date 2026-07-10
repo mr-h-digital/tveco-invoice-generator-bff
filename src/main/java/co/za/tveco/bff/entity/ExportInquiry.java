@@ -20,35 +20,32 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "export_jobs")
+@Table(name = "export_inquiries")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ExportJob {
+public class ExportInquiry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "job_number", nullable = false, unique = true)
-    private String jobNumber;
+    @Column(name = "inquiry_number", nullable = false, unique = true)
+    private String inquiryNumber;
 
-    @Column(name = "public_tracking_token", nullable = false, unique = true)
-    private String publicTrackingToken;
-
-    @Column(name = "client_id")
+    @Column(name = "client_id", nullable = false)
     private UUID clientId;
 
-    @Column(name = "quote_id")
-    private UUID quoteId;
+    @Column(name = "inquiry_type", nullable = false)
+    private String inquiryType;
 
-    @Column(name = "inquiry_id")
-    private UUID inquiryId;
+    @Column(name = "status", nullable = false)
+    private String status;
 
-    @Column(name = "client_snapshot", nullable = false, columnDefinition = "TEXT")
-    private String clientSnapshot;
+    @Column(name = "source_channel", nullable = false)
+    private String sourceChannel;
 
     @Column(name = "destination_country", nullable = false)
     private String destinationCountry;
@@ -56,38 +53,17 @@ public class ExportJob {
     @Column(name = "vehicle_description", nullable = false)
     private String vehicleDescription;
 
-    @Column(name = "source_channel", nullable = false)
-    private String sourceChannel;
-
     @Column(name = "project_value", nullable = false)
     private BigDecimal projectValue;
 
-    @Column(name = "status", nullable = false)
-    private String status;
-
-    @Column(name = "milestones", nullable = false, columnDefinition = "TEXT")
-    private String milestones;
-
-    @Column(name = "documents", nullable = false, columnDefinition = "TEXT")
-    private String documents;
-
-    @Column(name = "payment_milestones", nullable = false, columnDefinition = "TEXT")
-    private String paymentMilestones;
-
-    @Column(name = "vault_documents", nullable = false, columnDefinition = "TEXT")
-    private String vaultDocuments;
-
-    @Column(name = "estimated_departure_date", nullable = false)
+    @Column(name = "estimated_departure_date")
     private LocalDate estimatedDepartureDate;
 
-    @Column(name = "estimated_arrival_date", nullable = false)
+    @Column(name = "estimated_arrival_date")
     private LocalDate estimatedArrivalDate;
 
     @Column(name = "notes", nullable = false, columnDefinition = "TEXT")
     private String notes;
-
-    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
-    private String cancellationReason;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

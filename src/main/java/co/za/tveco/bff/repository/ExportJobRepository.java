@@ -16,4 +16,8 @@ public interface ExportJobRepository extends JpaRepository<ExportJob, UUID> {
     List<ExportJob> findByClientIdOrderByCreatedAtDesc(UUID clientId);
 
     Optional<ExportJob> findByIdAndClientId(UUID id, UUID clientId);
+
+    Optional<ExportJob> findByInquiryId(UUID inquiryId);
+
+    Optional<ExportJob> findByQuoteId(UUID quoteId);
 }

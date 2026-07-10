@@ -40,6 +40,9 @@ public class Quote {
     @Column(name = "client_id")
     private UUID clientId;
 
+    @Column(name = "inquiry_id")
+    private UUID inquiryId;
+
     @Column(name = "snap_company_name")
     private String snapCompanyName;
 
@@ -81,6 +84,12 @@ public class Quote {
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "client_decision_at")
+    private Instant clientDecisionAt;
+
+    @Column(name = "client_decision_note", columnDefinition = "TEXT")
+    private String clientDecisionNote;
 
     @OneToMany(mappedBy = "quote", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("sort_order ASC, id ASC")

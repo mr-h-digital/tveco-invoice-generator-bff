@@ -26,6 +26,8 @@ public record QuoteRequest(
 
         UUID clientId,
 
+        UUID inquiryId,
+
         @NotNull @Valid
         ClientSnapshotDto clientSnapshot,
 

@@ -1,18 +1,20 @@
 package co.za.tveco.bff.service;
 
 import co.za.tveco.bff.dto.ClientDocumentUploadRequest;
-import co.za.tveco.bff.dto.ClientExportJobRequest;
-import co.za.tveco.bff.dto.ExportJobClientSnapshotDto;
-import co.za.tveco.bff.dto.ExportJobCreateRequest;
+import co.za.tveco.bff.dto.ClientExportInquiryRequest;
+import co.za.tveco.bff.dto.ClientQuoteDecisionRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
+import co.za.tveco.bff.dto.ExportInquiryDto;
+import co.za.tveco.bff.dto.InquiryMessageCreateRequest;
+import co.za.tveco.bff.dto.QuoteDto;
 import co.za.tveco.bff.entity.AppUser;
-import co.za.tveco.bff.entity.Client;
 import co.za.tveco.bff.entity.ExportJob;
+import co.za.tveco.bff.entity.Quote;
 import co.za.tveco.bff.exception.ForbiddenException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
 import co.za.tveco.bff.repository.AppUserRepository;
-import co.za.tveco.bff.repository.ClientRepository;
 import co.za.tveco.bff.repository.ExportJobRepository;
+import co.za.tveco.bff.repository.QuoteRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,9 +38,10 @@ public class ClientPortalService {
     private static final int MAX_DATA_URL_LENGTH = 7_000_000;
 
     private final AppUserRepository appUserRepository;
-    private final ClientRepository clientRepository;
     private final ExportJobRepository exportJobRepository;
-    private final ExportJobService exportJobService;
+    private final QuoteRepository quoteRepository;
+    private final QuoteService quoteService;
+    private final ExportInquiryService exportInquiryService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -49,33 +52,58 @@ public class ClientPortalService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ExportInquiryDto> getMyInquiries(String email) {
+        return exportInquiryService.getForClient(email);
+    }
+
     @Transactional
-    public ExportJobDto createRequest(String email, ClientExportJobRequest req) {
+    public ExportInquiryDto createInquiry(String email, ClientExportInquiryRequest req) {
+        return exportInquiryService.createForClient(email, req);
+    }
+
+    @Transactional
+    public ExportInquiryDto respondToInquiry(String email, UUID inquiryId, InquiryMessageCreateRequest req) {
+        return exportInquiryService.addClientResponse(email, inquiryId, req);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuoteDto> getMyQuotes(String email) {
         AppUser user = getClientUser(email);
-        Client client = clientRepository.findById(user.getClientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
+        return quoteRepository.findByClientIdOrderByCreatedAtDesc(user.getClientId()).stream()
+                .map(quoteService::toDto)
+                .toList();
+    }
 
-        ExportJobCreateRequest createReq = new ExportJobCreateRequest(
-                client.getId(),
-                new ExportJobClientSnapshotDto(
-                        client.getCompanyName(),
-                        client.getContactName(),
-                        client.getEmail(),
-                        client.getPhone()
-                ),
-                req.destinationCountry().trim(),
-                req.vehicleDescription().trim(),
-                "Website",
-                req.projectValue(),
-                null,
-                null,
-                null,
-                req.estimatedDepartureDate(),
-                req.estimatedArrivalDate(),
-                req.notes()
-        );
+    @Transactional
+    public QuoteDto decideQuote(String email, UUID quoteId, ClientQuoteDecisionRequest req) {
+        AppUser user = getClientUser(email);
+        Quote quote = quoteRepository.findByIdAndClientId(quoteId, user.getClientId())
+                .orElseThrow(() -> new ResourceNotFoundException("Quote not found"));
 
-        return exportJobService.create(createReq);
+        if (!"SENT".equals(quote.getStatus())) {
+            throw new IllegalArgumentException("Only SENT quotes can be accepted or declined");
+        }
+
+        String normalized = req.status().trim().toUpperCase(Locale.ROOT);
+        if (!"ACCEPTED".equals(normalized) && !"DECLINED".equals(normalized) && !"REJECTED".equals(normalized)) {
+            throw new IllegalArgumentException("Status must be ACCEPTED or DECLINED");
+        }
+
+        quote.setStatus("ACCEPTED".equals(normalized) ? "ACCEPTED" : "REJECTED");
+        quote.setClientDecisionAt(Instant.now());
+        quote.setClientDecisionNote(req.note() == null ? null : req.note().trim());
+        Quote saved = quoteRepository.save(quote);
+
+        if (saved.getInquiryId() != null) {
+            if ("ACCEPTED".equals(saved.getStatus())) {
+                exportInquiryService.updateStatusInternal(saved.getInquiryId(), "QUOTED");
+            } else {
+                exportInquiryService.updateStatusInternal(saved.getInquiryId(), "CLOSED");
+            }
+        }
+
+        return quoteService.toDto(saved);
     }
 
     @Transactional
@@ -160,6 +188,8 @@ public class ClientPortalService {
                 e.getJobNumber(),
                 e.getPublicTrackingToken(),
                 e.getClientId(),
+                e.getQuoteId(),
+                e.getInquiryId(),
                 readJson(e.getClientSnapshot(), objectMapper.createObjectNode()),
                 e.getDestinationCountry(),
                 e.getVehicleDescription(),

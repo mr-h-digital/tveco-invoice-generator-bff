@@ -1,9 +1,13 @@
 package co.za.tveco.bff.controller;
 
 import co.za.tveco.bff.dto.ApiResponse;
+import co.za.tveco.bff.dto.ClientExportInquiryRequest;
+import co.za.tveco.bff.dto.ClientQuoteDecisionRequest;
 import co.za.tveco.bff.dto.ClientDocumentUploadRequest;
-import co.za.tveco.bff.dto.ClientExportJobRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
+import co.za.tveco.bff.dto.ExportInquiryDto;
+import co.za.tveco.bff.dto.InquiryMessageCreateRequest;
+import co.za.tveco.bff.dto.QuoteDto;
 import co.za.tveco.bff.service.ClientPortalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +34,40 @@ public class ClientPortalController {
         return ApiResponse.of(clientPortalService.getMyJobs(authentication.getName()));
     }
 
-    @PostMapping("/requests")
-    public ApiResponse<ExportJobDto> submitExportRequest(@Valid @RequestBody ClientExportJobRequest req, Authentication authentication) {
-        return ApiResponse.of(clientPortalService.createRequest(authentication.getName(), req));
+    @GetMapping("/inquiries")
+    public ApiResponse<List<ExportInquiryDto>> getMyInquiries(Authentication authentication) {
+        return ApiResponse.of(clientPortalService.getMyInquiries(authentication.getName()));
+    }
+
+    @PostMapping("/inquiries")
+    public ApiResponse<ExportInquiryDto> submitExportInquiry(
+            @Valid @RequestBody ClientExportInquiryRequest req,
+            Authentication authentication
+    ) {
+        return ApiResponse.of(clientPortalService.createInquiry(authentication.getName(), req));
+    }
+
+    @PostMapping("/inquiries/{id}/responses")
+    public ApiResponse<ExportInquiryDto> respondToInquiry(
+            @PathVariable UUID id,
+            @Valid @RequestBody InquiryMessageCreateRequest req,
+            Authentication authentication
+    ) {
+        return ApiResponse.of(clientPortalService.respondToInquiry(authentication.getName(), id, req));
+    }
+
+    @GetMapping("/quotes")
+    public ApiResponse<List<QuoteDto>> getMyQuotes(Authentication authentication) {
+        return ApiResponse.of(clientPortalService.getMyQuotes(authentication.getName()));
+    }
+
+    @PostMapping("/quotes/{id}/decision")
+    public ApiResponse<QuoteDto> decideQuote(
+            @PathVariable UUID id,
+            @Valid @RequestBody ClientQuoteDecisionRequest req,
+            Authentication authentication
+    ) {
+        return ApiResponse.of(clientPortalService.decideQuote(authentication.getName(), id, req));
     }
 
     @PostMapping("/jobs/{id}/documents")

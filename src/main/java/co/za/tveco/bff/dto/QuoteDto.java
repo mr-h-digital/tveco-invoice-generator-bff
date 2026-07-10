@@ -13,6 +13,7 @@ public record QuoteDto(
         LocalDate issueDate,
         LocalDate expiryDate,
         UUID clientId,
+        UUID inquiryId,
         ClientSnapshotDto clientSnapshot,
         List<LineItemDto> lineItems,
         BigDecimal subtotal,
@@ -24,6 +25,8 @@ public record QuoteDto(
         BigDecimal vatAmount,
         BigDecimal total,
         String notes,
+        Instant clientDecisionAt,
+        String clientDecisionNote,
         Instant createdAt,
         Instant updatedAt
 ) {}

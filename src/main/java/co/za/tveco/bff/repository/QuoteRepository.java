@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -18,6 +20,12 @@ public interface QuoteRepository extends JpaRepository<Quote, UUID> {
     boolean existsByQuoteNumber(String quoteNumber);
 
     boolean existsByQuoteNumberAndIdNot(String quoteNumber, UUID id);
+
+    List<Quote> findByClientIdOrderByCreatedAtDesc(UUID clientId);
+
+    List<Quote> findByInquiryIdOrderByCreatedAtDesc(UUID inquiryId);
+
+    Optional<Quote> findByIdAndClientId(UUID id, UUID clientId);
 
     @Query("""
         SELECT COALESCE(MAX(CAST(SPLIT_PART(q.quoteNumber, '-', 3) AS int)), 0)

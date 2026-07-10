@@ -12,6 +12,10 @@ import java.util.UUID;
 public record ExportJobCreateRequest(
         UUID clientId,
 
+        UUID quoteId,
+
+        UUID inquiryId,
+
         @NotNull @Valid
         ExportJobClientSnapshotDto clientSnapshot,
 

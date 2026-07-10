@@ -87,6 +87,8 @@ public class ExportJobService {
                 .jobNumber(jobNumber)
                 .publicTrackingToken(token)
                 .clientId(req.clientId())
+            .quoteId(req.quoteId())
+            .inquiryId(req.inquiryId())
                 .clientSnapshot(writeJson(buildClientSnapshot(req)))
                 .destinationCountry(req.destinationCountry().trim())
                 .vehicleDescription(req.vehicleDescription().trim())
@@ -397,6 +399,8 @@ public class ExportJobService {
                 e.getJobNumber(),
                 e.getPublicTrackingToken(),
                 e.getClientId(),
+            e.getQuoteId(),
+            e.getInquiryId(),
                 readJson(e.getClientSnapshot(), objectMapper.createObjectNode()),
                 e.getDestinationCountry(),
                 e.getVehicleDescription(),

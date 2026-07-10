@@ -8,6 +8,8 @@ import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import co.za.tveco.bff.repository.ExportJobRepository;
 import co.za.tveco.bff.repository.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
@@ -91,7 +93,13 @@ public class InvoiceService {
     public InvoiceDto updateStatus(UUID id, String status) {
         Invoice invoice = findOrThrow(id);
         invoice.setStatus(status);
-        return toDto(invoiceRepository.save(invoice));
+        Invoice saved = invoiceRepository.save(invoice);
+
+        if ("PAID".equalsIgnoreCase(status) && saved.getExportJobId() != null) {
+            synchronizePaymentMilestones(saved);
+        }
+
+        return toDto(saved);
     }
 
     @Transactional
@@ -281,6 +289,60 @@ public class InvoiceService {
             return null;
         }
         return paymentMilestoneKey.trim();
+    }
+
+    private void synchronizePaymentMilestones(Invoice invoice) {
+        ExportJob exportJob = exportJobRepository.findById(invoice.getExportJobId())
+                .orElseThrow(() -> new ResourceNotFoundException("Export job not found: " + invoice.getExportJobId()));
+
+        JsonNode parsed = readJsonSafe(exportJob.getPaymentMilestones());
+        if (!(parsed instanceof ArrayNode milestones)) {
+            return;
+        }
+
+        String now = java.time.Instant.now().toString();
+        String milestoneKey = normalizeScopeKey(invoice.getPaymentMilestoneKey());
+
+        if (milestoneKey == null) {
+            for (JsonNode node : milestones) {
+                if (node instanceof ObjectNode objectNode) {
+                    objectNode.put("paid", true);
+                    objectNode.put("paidAt", now);
+                }
+            }
+        } else {
+            boolean found = false;
+            for (JsonNode node : milestones) {
+                if (node instanceof ObjectNode objectNode && milestoneKey.equals(objectNode.path("key").asText(null))) {
+                    objectNode.put("paid", true);
+                    objectNode.put("paidAt", now);
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                throw new ConflictException("Payment milestone not found on export job: " + milestoneKey);
+            }
+        }
+
+        try {
+            exportJob.setPaymentMilestones(objectMapper.writeValueAsString(milestones));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("Unable to serialize payment milestones", e);
+        }
+        exportJobRepository.save(exportJob);
+    }
+
+    private JsonNode readJsonSafe(String raw) {
+        try {
+            if (raw == null || raw.isBlank()) {
+                return objectMapper.createArrayNode();
+            }
+            return objectMapper.readTree(raw);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return objectMapper.createArrayNode();
+        }
     }
 
     private BigDecimal scaleAmount(BigDecimal amount) {

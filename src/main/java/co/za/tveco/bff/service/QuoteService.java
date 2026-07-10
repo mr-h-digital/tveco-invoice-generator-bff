@@ -9,6 +9,7 @@ import co.za.tveco.bff.entity.Quote;
 import co.za.tveco.bff.entity.QuoteLineItem;
 import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
+import co.za.tveco.bff.repository.ExportInquiryRepository;
 import co.za.tveco.bff.repository.QuoteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +27,7 @@ import java.util.UUID;
 public class QuoteService {
 
     private final QuoteRepository quoteRepository;
+    private final ExportInquiryRepository exportInquiryRepository;
 
     @Transactional(readOnly = true)
     public Page<QuoteDto> getAll(Pageable pageable) {
@@ -50,7 +52,9 @@ public class QuoteService {
             throw new ConflictException("Quote number '" + req.quoteNumber() + "' already exists");
         }
         Quote quote = buildQuote(new Quote(), req);
-        return toDto(quoteRepository.save(quote));
+        Quote saved = quoteRepository.save(quote);
+        syncInquiryStatusFromQuote(saved);
+        return toDto(saved);
     }
 
     @Transactional
@@ -61,14 +65,18 @@ public class QuoteService {
         }
         quote.getLineItems().clear();
         buildQuote(quote, req);
-        return toDto(quoteRepository.save(quote));
+        Quote saved = quoteRepository.save(quote);
+        syncInquiryStatusFromQuote(saved);
+        return toDto(saved);
     }
 
     @Transactional
     public QuoteDto updateStatus(UUID id, String status) {
         Quote quote = findOrThrow(id);
         quote.setStatus(status);
-        return toDto(quoteRepository.save(quote));
+        Quote saved = quoteRepository.save(quote);
+        syncInquiryStatusFromQuote(saved);
+        return toDto(saved);
     }
 
     @Transactional
@@ -90,6 +98,7 @@ public class QuoteService {
                 .issueDate(LocalDate.now())
                 .expiryDate(original.getExpiryDate())
                 .clientId(original.getClientId())
+                .inquiryId(original.getInquiryId())
                 .snapCompanyName(original.getSnapCompanyName())
                 .snapContactName(original.getSnapContactName())
                 .snapEmail(original.getSnapEmail())
@@ -104,6 +113,8 @@ public class QuoteService {
                 .vatAmount(original.getVatAmount())
                 .total(original.getTotal())
                 .notes(original.getNotes())
+                .clientDecisionAt(null)
+                .clientDecisionNote(null)
                 .build();
 
         original.getLineItems().forEach(li -> {
@@ -136,6 +147,7 @@ public class QuoteService {
         quote.setIssueDate(LocalDate.parse(req.issueDate()));
         quote.setExpiryDate(LocalDate.parse(req.expiryDate()));
         quote.setClientId(req.clientId());
+        quote.setInquiryId(req.inquiryId());
 
         ClientSnapshotDto snap = req.clientSnapshot();
         quote.setSnapCompanyName(nvl(snap.companyName()));
@@ -180,6 +192,21 @@ public class QuoteService {
         return s == null ? "" : s;
     }
 
+    private void syncInquiryStatusFromQuote(Quote quote) {
+        if (quote.getInquiryId() == null) {
+            return;
+        }
+
+        if (!"SENT".equals(quote.getStatus())) {
+            return;
+        }
+
+        exportInquiryRepository.findById(quote.getInquiryId()).ifPresent(inquiry -> {
+            inquiry.setStatus("QUOTED");
+            exportInquiryRepository.save(inquiry);
+        });
+    }
+
     QuoteDto toDto(Quote quote) {
         List<LineItemDto> items = quote.getLineItems().stream()
                 .map(li -> new LineItemDto(
@@ -200,6 +227,7 @@ public class QuoteService {
                 quote.getIssueDate(),
                 quote.getExpiryDate(),
                 quote.getClientId(),
+            quote.getInquiryId(),
                 new ClientSnapshotDto(
                         quote.getSnapCompanyName(),
                         quote.getSnapContactName(),
@@ -217,6 +245,8 @@ public class QuoteService {
                 quote.getVatAmount(),
                 quote.getTotal(),
                 quote.getNotes(),
+                quote.getClientDecisionAt(),
+                quote.getClientDecisionNote(),
                 quote.getCreatedAt(),
                 quote.getUpdatedAt()
         );
