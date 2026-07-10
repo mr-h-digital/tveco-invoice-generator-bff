@@ -100,7 +100,7 @@ public class ExportInquiryService {
                 .sourceChannel("Website")
                 .destinationCountry(req.destinationCountry().trim())
                 .vehicleDescription(req.vehicleDescription().trim())
-                .projectValue(req.projectValue())
+            .projectValue(req.projectValue() == null ? null : req.projectValue().setScale(2, java.math.RoundingMode.HALF_UP))
                 .estimatedDepartureDate(departure)
                 .estimatedArrivalDate(arrival)
                 .notes(req.notes() == null ? "" : req.notes().trim())

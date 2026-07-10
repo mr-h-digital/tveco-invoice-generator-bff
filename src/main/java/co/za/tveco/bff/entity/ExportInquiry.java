@@ -53,7 +53,7 @@ public class ExportInquiry {
     @Column(name = "vehicle_description", nullable = false)
     private String vehicleDescription;
 
-    @Column(name = "project_value", nullable = false)
+    @Column(name = "project_value")
     private BigDecimal projectValue;
 
     @Column(name = "estimated_departure_date")
