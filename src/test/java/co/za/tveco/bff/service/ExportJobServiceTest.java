@@ -98,6 +98,8 @@ class ExportJobServiceTest {
 
         var request = new co.za.tveco.bff.dto.ExportJobCreateRequest(
                 null,
+            null,
+            null,
                 new co.za.tveco.bff.dto.ExportJobClientSnapshotDto("ACME", "Jane Doe", "jane@example.com", "+27110000000"),
                 "Namibia",
                 "Toyota Land Cruiser 300",
@@ -116,9 +118,12 @@ class ExportJobServiceTest {
         assertThat(created.paymentMilestones().get(0).get("label").asText()).contains("25%");
         assertThat(created.paymentMilestones().get(1).get("label").asText()).contains("50%");
         assertThat(created.paymentMilestones().get(2).get("label").asText()).contains("25%");
-        assertThat(created.paymentMilestones().get(0).get("amount").asText()).isEqualTo("25000.00");
-        assertThat(created.paymentMilestones().get(1).get("amount").asText()).isEqualTo("50000.00");
-        assertThat(created.paymentMilestones().get(2).get("amount").asText()).isEqualTo("25000.00");
+        assertThat(new BigDecimal(created.paymentMilestones().get(0).get("amount").asText()))
+            .isEqualByComparingTo(BigDecimal.valueOf(25000));
+        assertThat(new BigDecimal(created.paymentMilestones().get(1).get("amount").asText()))
+            .isEqualByComparingTo(BigDecimal.valueOf(50000));
+        assertThat(new BigDecimal(created.paymentMilestones().get(2).get("amount").asText()))
+            .isEqualByComparingTo(BigDecimal.valueOf(25000));
     }
 
     @Test
