@@ -377,13 +377,15 @@ API runs at **http://localhost:8080**
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `jdbc:postgresql://localhost:5432/tveco` | Full PostgreSQL JDBC URL (Railway sets this automatically) |
+| `DATABASE_PUBLIC_URL` | _(empty)_ | Railway/Postgres connection URL; preferred in hosted deployments when internal DNS is unavailable |
+| `DATABASE_URL` | `jdbc:postgresql://localhost:5432/tveco` | PostgreSQL connection URL; supports `jdbc:postgresql://`, `postgres://`, and `postgresql://` |
+| `PGHOST` / `PGPORT` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` | local defaults | Fallback host-based PostgreSQL settings when URL-style vars are not present |
 | `PORT` | `8080` | HTTP port the server binds to |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | Comma-separated list of allowed front-end origins |
 | `NOTIFICATION_WEBHOOK_URL` | _(empty)_ | Outbox dispatch webhook URL (optional) |
 | `NOTIFICATION_WEBHOOK_SECRET` | _(empty)_ | Shared secret header value for outbox webhook |
 
-On Railway, `DATABASE_URL` is injected automatically when a PostgreSQL service is linked to this deployment.
+On Railway, the app now prefers `DATABASE_PUBLIC_URL` or `DATABASE_URL` when present and will normalize Railway-style `postgresql://...` URLs into a JDBC URL for Hikari/Flyway. It only falls back to `PG*` variables when no URL-style variable is available.
 
 ---
 
