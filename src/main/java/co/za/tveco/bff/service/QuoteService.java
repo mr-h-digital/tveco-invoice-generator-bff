@@ -192,19 +192,33 @@ public class QuoteService {
         return s == null ? "" : s;
     }
 
-    private void syncInquiryStatusFromQuote(Quote quote) {
+    void syncInquiryStatusFromQuote(Quote quote) {
         if (quote.getInquiryId() == null) {
             return;
         }
 
-        if (!"SENT".equals(quote.getStatus())) {
+        String inquiryStatus = mapInquiryStatusFromQuote(quote.getStatus());
+        if (inquiryStatus == null) {
             return;
         }
 
         exportInquiryRepository.findById(quote.getInquiryId()).ifPresent(inquiry -> {
-            inquiry.setStatus("QUOTED");
+            inquiry.setStatus(inquiryStatus);
             exportInquiryRepository.save(inquiry);
         });
+    }
+
+    private String mapInquiryStatusFromQuote(String quoteStatus) {
+        if (quoteStatus == null || quoteStatus.isBlank()) {
+            return null;
+        }
+
+        return switch (quoteStatus.trim().toUpperCase()) {
+            case "SENT" -> "QUOTED";
+            case "ACCEPTED" -> "QUOTE_ACCEPTED";
+            case "REJECTED", "EXPIRED" -> "CLOSED";
+            default -> null;
+        };
     }
 
     QuoteDto toDto(Quote quote) {

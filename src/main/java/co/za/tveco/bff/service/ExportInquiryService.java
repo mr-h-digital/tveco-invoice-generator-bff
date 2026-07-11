@@ -42,6 +42,7 @@ public class ExportInquiryService {
             "WAITING_ON_CLIENT",
             "READY_FOR_QUOTE",
             "QUOTED",
+            "QUOTE_ACCEPTED",
             "CONVERTED_TO_JOB",
             "CLOSED"
     );

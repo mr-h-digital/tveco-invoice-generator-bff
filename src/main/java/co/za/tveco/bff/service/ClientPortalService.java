@@ -94,14 +94,7 @@ public class ClientPortalService {
         quote.setClientDecisionAt(Instant.now());
         quote.setClientDecisionNote(req.note() == null ? null : req.note().trim());
         Quote saved = quoteRepository.save(quote);
-
-        if (saved.getInquiryId() != null) {
-            if ("ACCEPTED".equals(saved.getStatus())) {
-                exportInquiryService.updateStatusInternal(saved.getInquiryId(), "QUOTED");
-            } else {
-                exportInquiryService.updateStatusInternal(saved.getInquiryId(), "CLOSED");
-            }
-        }
+        quoteService.syncInquiryStatusFromQuote(saved);
 
         return quoteService.toDto(saved);
     }
