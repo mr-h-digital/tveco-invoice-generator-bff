@@ -46,8 +46,8 @@ public class DataSourceConfig {
         String rawUrl = firstNonBlank(
                 environment.getProperty("SPRING_DATASOURCE_URL"),
                 environment.getProperty("JDBC_DATABASE_URL"),
-                environment.getProperty("DATABASE_PUBLIC_URL"),
-                environment.getProperty("DATABASE_URL")
+            environment.getProperty("DATABASE_URL"),
+            environment.getProperty("DATABASE_PUBLIC_URL")
         );
 
         if (hasText(rawUrl)) {
