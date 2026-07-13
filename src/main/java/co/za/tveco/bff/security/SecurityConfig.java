@@ -36,7 +36,19 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/api/auth/login", "/api/auth/signup", "/api/auth/refresh", "/api/auth/logout", "/api/export-jobs/tracking/**", "/actuator/**", "/error").permitAll()
+                    .requestMatchers(
+                            "/api/auth/login",
+                            "/api/auth/signup",
+                            "/api/auth/refresh",
+                            "/api/auth/logout",
+                            "/api/auth/forgot-password",
+                            "/api/auth/reset-password",
+                            "/api/auth/recovery/otp/request",
+                            "/api/auth/recovery/otp/verify",
+                            "/api/export-jobs/tracking/**",
+                            "/actuator/**",
+                            "/error"
+                    ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

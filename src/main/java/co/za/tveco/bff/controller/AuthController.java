@@ -5,6 +5,12 @@ import co.za.tveco.bff.dto.AuthLoginRequest;
 import co.za.tveco.bff.dto.AuthLoginResponse;
 import co.za.tveco.bff.dto.AuthSignupRequest;
 import co.za.tveco.bff.dto.AuthTokens;
+import co.za.tveco.bff.dto.ForgotPasswordRequest;
+import co.za.tveco.bff.dto.OtpRecoveryChallengeResponse;
+import co.za.tveco.bff.dto.OtpRecoveryRequest;
+import co.za.tveco.bff.dto.OtpRecoveryVerifyRequest;
+import co.za.tveco.bff.dto.OtpRecoveryVerifyResponse;
+import co.za.tveco.bff.dto.ResetPasswordRequest;
 import co.za.tveco.bff.exception.UnauthorizedException;
 import co.za.tveco.bff.security.AuthRateLimiter;
 import co.za.tveco.bff.security.RefreshTokenCookieService;
@@ -85,6 +91,37 @@ public class AuthController {
         refreshTokenCookieService.resolveRefreshToken(request).ifPresent(authService::logout);
         refreshTokenCookieService.clearRefreshTokenCookie(response);
         return ApiResponse.of(null);
+    }
+
+    @PostMapping("/forgot-password")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
+        authService.forgotPassword(req.email());
+        return ApiResponse.of(null);
+    }
+
+    @PostMapping("/reset-password")
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+        authService.resetPasswordWithToken(req.token(), req.newPassword());
+        return ApiResponse.of(null);
+    }
+
+    @PostMapping("/recovery/otp/request")
+    public ApiResponse<OtpRecoveryChallengeResponse> requestOtpRecovery(@Valid @RequestBody OtpRecoveryRequest req) {
+        String challengeId = authService.requestOtpRecovery(req.purpose(), req.channel(), req.identifier());
+        return ApiResponse.of(new OtpRecoveryChallengeResponse(
+                challengeId,
+                "If your details match an account, an OTP has been sent."
+        ));
+    }
+
+    @PostMapping("/recovery/otp/verify")
+    public ApiResponse<OtpRecoveryVerifyResponse> verifyOtpRecovery(@Valid @RequestBody OtpRecoveryVerifyRequest req) {
+        AuthService.OtpRecoveryResult result = authService.verifyOtpRecovery(req.challengeId(), req.otp(), req.newPassword());
+        return ApiResponse.of(new OtpRecoveryVerifyResponse(
+                result.username(),
+                result.passwordReset(),
+                result.message()
+        ));
     }
 
     private String resolveClientIp(HttpServletRequest request) {
