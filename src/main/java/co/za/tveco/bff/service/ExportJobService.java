@@ -2,6 +2,7 @@ package co.za.tveco.bff.service;
 
 import co.za.tveco.bff.dto.ExportJobCreateRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
+import co.za.tveco.bff.dto.EmitNotificationRequest;
 import co.za.tveco.bff.entity.ExportJob;
 import co.za.tveco.bff.exception.ConflictException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
@@ -46,6 +47,7 @@ public class ExportJobService {
     private final ExportJobRepository exportJobRepository;
     private final InvoiceRepository invoiceRepository;
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<ExportJobDto> getAll() {
@@ -105,12 +107,16 @@ public class ExportJobService {
                 .cancellationReason(null)
                 .build();
 
-        return toDto(exportJobRepository.save(entity));
+            ExportJob saved = exportJobRepository.save(entity);
+            ExportJobDto dto = toDto(saved);
+            emitJobCreatedNotification(dto);
+            return dto;
     }
 
     @Transactional
     public ExportJobDto patch(UUID id, Map<String, Object> patch) {
         ExportJob job = findOrThrow(id);
+        String previousStatus = job.getStatus();
 
         if (TERMINAL_STATUSES.contains(job.getStatus())) {
             throw new ConflictException("Export job can no longer be edited once it is " + job.getStatus());
@@ -217,7 +223,14 @@ public class ExportJobService {
         }
 
         normalizeMilestonesForStatus(job);
-        return toDto(exportJobRepository.save(job));
+        ExportJob saved = exportJobRepository.save(job);
+        ExportJobDto dto = toDto(saved);
+
+        if (!previousStatus.equals(dto.status())) {
+            emitStatusChangedNotification(dto, previousStatus);
+        }
+
+        return dto;
     }
 
     @Transactional
@@ -245,6 +258,75 @@ public class ExportJobService {
     private ExportJob findOrThrow(UUID id) {
         return exportJobRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Export job not found: " + id));
+    }
+
+    private void emitJobCreatedNotification(ExportJobDto job) {
+        String email = clientEmail(job);
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        boolean convertedFromInquiry = job.inquiryId() != null || job.quoteId() != null;
+        String title = convertedFromInquiry
+                ? "Export job " + job.jobNumber() + " created from your accepted quote"
+                : "Export job " + job.jobNumber() + " has been created";
+        String message = convertedFromInquiry
+                ? "Your accepted quote has been converted into a live export job."
+                : "Your export request is now active and has been created as a live export job.";
+        String subject = "TVECO Export Job Created: " + job.jobNumber();
+        String body = "Hello,\n\n"
+                + message + "\n"
+                + "Job Number: " + job.jobNumber() + "\n"
+                + "Current Status: " + job.status() + "\n\n"
+                + "You can track progress from your TVECO client zone.\n\n"
+                + "Regards,\nTVECO Operations";
+
+        notificationService.emit(new EmitNotificationRequest(
+                "EXPORT_STATUS_CHANGED",
+                title,
+                message,
+                job.id().toString(),
+                email,
+                subject,
+                body,
+                null
+        ));
+    }
+
+    private void emitStatusChangedNotification(ExportJobDto job, String previousStatus) {
+        String email = clientEmail(job);
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        String title = job.jobNumber() + " moved from " + previousStatus + " to " + job.status();
+        String message = "Your export job status has changed to " + job.status() + ".";
+        String subject = "TVECO Status Update: " + job.jobNumber() + " is now " + job.status();
+        String body = "Hello,\n\n"
+                + "Your export job progress has been updated.\n"
+                + "Job Number: " + job.jobNumber() + "\n"
+                + "Previous Status: " + previousStatus + "\n"
+                + "Current Status: " + job.status() + "\n\n"
+                + "Regards,\nTVECO Operations";
+
+        notificationService.emit(new EmitNotificationRequest(
+                "EXPORT_STATUS_CHANGED",
+                title,
+                message,
+                job.id().toString(),
+                email,
+                subject,
+                body,
+                null
+        ));
+    }
+
+    private String clientEmail(ExportJobDto job) {
+        if (job.clientSnapshot() == null) {
+            return null;
+        }
+        String email = job.clientSnapshot().path("email").asText("").trim();
+        return email.isBlank() ? null : email;
     }
 
     private ObjectNode buildClientSnapshot(ExportJobCreateRequest req) {

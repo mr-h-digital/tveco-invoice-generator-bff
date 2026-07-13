@@ -10,23 +10,11 @@ import co.za.tveco.bff.entity.EmailOutboxMessage;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
 import co.za.tveco.bff.repository.AppNotificationRepository;
 import co.za.tveco.bff.repository.EmailOutboxRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,13 +25,7 @@ public class NotificationService {
 
     private final AppNotificationRepository appNotificationRepository;
     private final EmailOutboxRepository emailOutboxRepository;
-    private final ObjectMapper objectMapper;
-
-    @Value("${app.notification.webhook-url:}")
-    private String webhookUrl;
-
-    @Value("${app.notification.webhook-secret:}")
-    private String webhookSecret;
+    private final NotificationDeliveryProvider notificationDeliveryProvider;
 
     @Transactional(readOnly = true)
     public List<AppNotificationDto> getNotifications() {
@@ -124,7 +106,7 @@ public class NotificationService {
 
     @Transactional
     public OutboxDispatchResultDto dispatchPendingOutbox() {
-        if (webhookUrl == null || webhookUrl.isBlank()) {
+        if (!notificationDeliveryProvider.isConfigured()) {
             return new OutboxDispatchResultDto(0, 0, true);
         }
 
@@ -134,17 +116,13 @@ public class NotificationService {
             return new OutboxDispatchResultDto(0, 0, false);
         }
 
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(8))
-                .build();
-
         int sent = 0;
         int failed = 0;
 
         for (EmailOutboxMessage msg : candidates) {
-            boolean ok = sendOutboxMessage(client, msg);
+            NotificationDeliveryProvider.DeliveryResult result = notificationDeliveryProvider.deliver(msg);
             msg.setAttempts(msg.getAttempts() + 1);
-            if (ok) {
+            if (result.success()) {
                 sent += 1;
                 msg.setStatus("SENT");
                 msg.setSentAt(Instant.now());
@@ -152,50 +130,12 @@ public class NotificationService {
             } else {
                 failed += 1;
                 msg.setStatus("FAILED");
+                msg.setLastError(result.error());
             }
             emailOutboxRepository.save(msg);
         }
 
         return new OutboxDispatchResultDto(sent, failed, false);
-    }
-
-    private boolean sendOutboxMessage(HttpClient client, EmailOutboxMessage msg) {
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("id", msg.getId().toString());
-            payload.put("to", msg.getRecipient());
-            payload.put("subject", msg.getSubject());
-            payload.put("body", msg.getBody());
-            payload.put("bodyHtml", msg.getBodyHtml());
-            payload.put("createdAt", msg.getCreatedAt() != null ? msg.getCreatedAt().toString() : Instant.now().toString());
-            String body = objectMapper.writeValueAsString(payload);
-
-            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                    .uri(URI.create(webhookUrl))
-                    .timeout(Duration.ofSeconds(15))
-                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                    .POST(HttpRequest.BodyPublishers.ofString(body));
-
-            if (isNotBlank(webhookSecret)) {
-                requestBuilder.header("x-tveco-webhook-secret", webhookSecret);
-            }
-
-            HttpResponse<String> response = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                return true;
-            }
-            msg.setLastError("HTTP " + response.statusCode());
-            return false;
-        } catch (JsonProcessingException e) {
-            msg.setLastError("JSON serialization failed");
-            return false;
-        } catch (IOException | InterruptedException e) {
-            msg.setLastError(e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            return false;
-        }
     }
 
     private boolean isNotBlank(String value) {
