@@ -7,7 +7,6 @@ import co.za.tveco.bff.dto.DocumentDownloadUrlResponse;
 import co.za.tveco.bff.dto.DocumentUploadCompleteRequest;
 import co.za.tveco.bff.dto.DocumentUploadInitRequest;
 import co.za.tveco.bff.dto.DocumentUploadInitResponse;
-import co.za.tveco.bff.dto.ClientDocumentUploadRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
 import co.za.tveco.bff.dto.ExportInquiryDto;
 import co.za.tveco.bff.dto.InquiryMessageCreateRequest;
@@ -25,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -79,12 +79,15 @@ public class ClientPortalController {
     }
 
     @PostMapping("/jobs/{id}/documents")
-    public ApiResponse<ExportJobDto> uploadDocument(
+    public void uploadDocumentDeprecated(
             @PathVariable UUID id,
-            @Valid @RequestBody ClientDocumentUploadRequest req,
+            @RequestBody(required = false) Object ignored,
             Authentication authentication
     ) {
-        return ApiResponse.of(clientPortalService.uploadDocument(authentication.getName(), id, req));
+        throw new ResponseStatusException(
+                HttpStatus.GONE,
+                "Endpoint deprecated. Use /api/client-portal/jobs/{id}/documents/init-upload and /complete-upload."
+        );
     }
 
     @PostMapping("/jobs/{id}/documents/init-upload")

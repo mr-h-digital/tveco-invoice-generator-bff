@@ -1,6 +1,5 @@
 package co.za.tveco.bff.service;
 
-import co.za.tveco.bff.dto.ClientDocumentUploadRequest;
 import co.za.tveco.bff.dto.ClientExportInquiryRequest;
 import co.za.tveco.bff.dto.ClientQuoteDecisionRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
@@ -18,8 +17,6 @@ import co.za.tveco.bff.repository.QuoteRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,15 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class ClientPortalService {
-
-    private static final Set<String> ALLOWED_CATEGORIES = Set.of("Compliance", "Shipping", "Customs", "Payment", "General");
-    private static final int MAX_DATA_URL_LENGTH = 7_000_000;
 
     private final AppUserRepository appUserRepository;
     private final ExportJobRepository exportJobRepository;
@@ -99,48 +92,6 @@ public class ClientPortalService {
         return quoteService.toDto(saved);
     }
 
-    @Transactional
-    public ExportJobDto uploadDocument(String email, UUID jobId, ClientDocumentUploadRequest req) {
-        AppUser user = getClientUser(email);
-        ExportJob job = exportJobRepository.findByIdAndClientId(jobId, user.getClientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Export job not found"));
-
-        String category = req.category().trim();
-        if (!ALLOWED_CATEGORIES.contains(category)) {
-            throw new IllegalArgumentException("Invalid document category");
-        }
-
-        String dataUrl = req.dataUrl() == null ? "" : req.dataUrl().trim();
-        String fileUrl = req.fileUrl() == null ? "" : req.fileUrl().trim();
-        if (dataUrl.isBlank() && fileUrl.isBlank()) {
-            throw new IllegalArgumentException("Either dataUrl or fileUrl is required");
-        }
-        if (!dataUrl.isBlank() && dataUrl.length() > MAX_DATA_URL_LENGTH) {
-            throw new IllegalArgumentException("Uploaded file is too large");
-        }
-
-        ArrayNode vaultDocuments = asArray(readJson(job.getVaultDocuments(), objectMapper.createArrayNode()));
-        ObjectNode document = objectMapper.createObjectNode();
-        document.put("id", UUID.randomUUID().toString());
-        document.put("name", req.name().trim());
-        document.put("mimeType", req.mimeType().trim());
-        document.put("sizeBytes", req.sizeBytes());
-        document.put("category", category);
-        document.put("uploadedAt", Instant.now().toString());
-        document.put("visibleToClient", true);
-        if (!dataUrl.isBlank()) {
-            document.put("storageProvider", "LOCAL");
-            document.put("dataUrl", dataUrl);
-        } else {
-            document.put("storageProvider", "REMOTE");
-            document.put("fileUrl", fileUrl);
-        }
-        vaultDocuments.add(document);
-
-        job.setVaultDocuments(writeJson(vaultDocuments));
-        return toDto(exportJobRepository.save(job));
-    }
-
     private AppUser getClientUser(String email) {
         AppUser user = appUserRepository.findByEmailIgnoreCase(email.trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new ForbiddenException("Client account not found"));
@@ -150,18 +101,6 @@ public class ClientPortalService {
         }
 
         return user;
-    }
-
-    private ArrayNode asArray(JsonNode node) {
-        return node != null && node.isArray() ? (ArrayNode) node : objectMapper.createArrayNode();
-    }
-
-    private String writeJson(JsonNode node) {
-        try {
-            return objectMapper.writeValueAsString(node);
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Unable to serialize JSON payload", e);
-        }
     }
 
     private JsonNode readJson(String raw, JsonNode fallback) {
