@@ -46,6 +46,11 @@ public class ProfileService {
     @Transactional
     public ProfileResponse updateMyProfile(String currentEmail, UpdateProfileRequest req) {
         AppUser user = findActiveUser(currentEmail);
+        Client client = null;
+        if ("client".equalsIgnoreCase(user.getRole())) {
+            client = findClientForUser(user, true);
+        }
+
         String normalizedEmail = req.email().trim().toLowerCase(Locale.ROOT);
 
         if (appUserRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, user.getId())) {
@@ -55,9 +60,7 @@ public class ProfileService {
         user.setEmail(normalizedEmail);
         appUserRepository.save(user);
 
-        if ("client".equalsIgnoreCase(user.getRole())) {
-            Client client = findClientForUser(user);
-
+        if (client != null) {
             if (clientRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, client.getId())) {
                 throw new ConflictException("Another client profile already uses this email");
             }
@@ -103,11 +106,24 @@ public class ProfileService {
     }
 
     private Client findClientForUser(AppUser user) {
-        if (user.getClientId() == null) {
-            throw new ResourceNotFoundException("Client profile link is missing for this account");
+        return findClientForUser(user, false);
+    }
+
+    private Client findClientForUser(AppUser user, boolean relinkIfPossible) {
+        if (user.getClientId() != null) {
+            return clientRepository.findById(user.getClientId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
         }
-        return clientRepository.findById(user.getClientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
+
+        Client client = clientRepository.findByEmailIgnoreCase(user.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("Client profile link is missing for this account"));
+
+        if (relinkIfPossible) {
+            user.setClientId(client.getId());
+            appUserRepository.save(user);
+        }
+
+        return client;
     }
 
     private ProfileResponse toProfileResponse(AppUser user) {
