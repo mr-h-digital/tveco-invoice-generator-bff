@@ -48,7 +48,7 @@ public class ProfileService {
         AppUser user = findActiveUser(currentEmail);
         Client client = null;
         if ("client".equalsIgnoreCase(user.getRole())) {
-            client = findClientForUser(user, true);
+            client = findClientForUserOrNull(user, true);
         }
 
         String normalizedEmail = req.email().trim().toLowerCase(Locale.ROOT);
@@ -60,7 +60,11 @@ public class ProfileService {
         user.setEmail(normalizedEmail);
         appUserRepository.save(user);
 
-        if (client != null) {
+        if ("client".equalsIgnoreCase(user.getRole())) {
+            if (client == null) {
+                client = createClientForUser(user, req, normalizedEmail);
+            }
+
             if (clientRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, client.getId())) {
                 throw new ConflictException("Another client profile already uses this email");
             }
@@ -106,17 +110,23 @@ public class ProfileService {
     }
 
     private Client findClientForUser(AppUser user) {
-        return findClientForUser(user, false);
+        Client client = findClientForUserOrNull(user, false);
+        if (client == null) {
+            throw new ResourceNotFoundException("Client profile link is missing for this account");
+        }
+        return client;
     }
 
-    private Client findClientForUser(AppUser user, boolean relinkIfPossible) {
+    private Client findClientForUserOrNull(AppUser user, boolean relinkIfPossible) {
         if (user.getClientId() != null) {
             return clientRepository.findById(user.getClientId())
                     .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
         }
 
-        Client client = clientRepository.findByEmailIgnoreCase(user.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Client profile link is missing for this account"));
+        Client client = clientRepository.findByEmailIgnoreCase(user.getEmail()).orElse(null);
+        if (client == null) {
+            return null;
+        }
 
         if (relinkIfPossible) {
             user.setClientId(client.getId());
@@ -138,7 +148,18 @@ public class ProfileService {
             );
         }
 
-        Client client = findClientForUser(user);
+        Client client = findClientForUserOrNull(user, false);
+        if (client == null) {
+            return new ProfileResponse(
+                    user.getEmail(),
+                    user.getRole(),
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
         return new ProfileResponse(
                 user.getEmail(),
                 user.getRole(),
@@ -149,7 +170,26 @@ public class ProfileService {
         );
     }
 
+    private Client createClientForUser(AppUser user, UpdateProfileRequest req, String normalizedEmail) {
+        Client created = Client.builder()
+                .email(normalizedEmail)
+                .companyName(trimOrEmpty(req.companyName()))
+                .contactName(trimOrEmpty(req.contactName()))
+                .phone(trimOrEmpty(req.phone()))
+                .address(trimOrEmpty(req.address()))
+                .build();
+
+        Client saved = clientRepository.save(created);
+        user.setClientId(saved.getId());
+        appUserRepository.save(user);
+        return saved;
+    }
+
     private boolean isNotBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String trimOrEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 }
