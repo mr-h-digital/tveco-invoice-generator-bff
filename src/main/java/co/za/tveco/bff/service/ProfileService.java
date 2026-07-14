@@ -119,8 +119,10 @@ public class ProfileService {
 
     private Client findClientForUserOrNull(AppUser user, boolean relinkIfPossible) {
         if (user.getClientId() != null) {
-            return clientRepository.findById(user.getClientId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
+            Client linkedClient = clientRepository.findById(user.getClientId()).orElse(null);
+            if (linkedClient != null) {
+                return linkedClient;
+            }
         }
 
         Client client = clientRepository.findByEmailIgnoreCase(user.getEmail()).orElse(null);
