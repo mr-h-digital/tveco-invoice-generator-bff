@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -29,6 +30,23 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ClientPortalService {
+
+    private static final Set<String> CLIENT_VISIBLE_QUOTE_STATUSES = Set.of(
+            "SENT",
+            "QUOTED",
+            "PENDING_CLIENT_DECISION",
+            "PENDING_CLIENT_RESPONSE",
+            "ACCEPTED",
+            "REJECTED",
+            "EXPIRED"
+    );
+
+    private static final Set<String> CLIENT_ACTIONABLE_QUOTE_STATUSES = Set.of(
+            "SENT",
+            "QUOTED",
+            "PENDING_CLIENT_DECISION",
+            "PENDING_CLIENT_RESPONSE"
+    );
 
     private final AppUserRepository appUserRepository;
     private final ExportJobRepository exportJobRepository;
@@ -64,6 +82,10 @@ public class ClientPortalService {
     public List<QuoteDto> getMyQuotes(String email) {
         AppUser user = getClientUser(email);
         return quoteRepository.findByClientIdOrderByCreatedAtDesc(user.getClientId()).stream()
+                .filter(quote -> {
+                    String status = quote.getStatus() == null ? "" : quote.getStatus().trim().toUpperCase(Locale.ROOT);
+                    return CLIENT_VISIBLE_QUOTE_STATUSES.contains(status);
+                })
                 .map(quoteService::toDto)
                 .toList();
     }
@@ -74,8 +96,9 @@ public class ClientPortalService {
         Quote quote = quoteRepository.findByIdAndClientId(quoteId, user.getClientId())
                 .orElseThrow(() -> new ResourceNotFoundException("Quote not found"));
 
-        if (!"SENT".equals(quote.getStatus())) {
-            throw new IllegalArgumentException("Only SENT quotes can be accepted or declined");
+        String currentStatus = quote.getStatus() == null ? "" : quote.getStatus().trim().toUpperCase(Locale.ROOT);
+        if (!CLIENT_ACTIONABLE_QUOTE_STATUSES.contains(currentStatus)) {
+            throw new IllegalArgumentException("Quote is not awaiting a client decision");
         }
 
         String normalized = req.status().trim().toUpperCase(Locale.ROOT);
