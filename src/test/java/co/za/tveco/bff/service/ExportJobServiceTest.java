@@ -35,12 +35,15 @@ class ExportJobServiceTest {
     @Mock
     private InvoiceRepository invoiceRepository;
 
+    @Mock
+    private NotificationService notificationService;
+
     @InjectMocks
     private ExportJobService exportJobService;
 
     @BeforeEach
     void setUp() {
-        exportJobService = new ExportJobService(exportJobRepository, invoiceRepository, new ObjectMapper());
+        exportJobService = new ExportJobService(exportJobRepository, invoiceRepository, new ObjectMapper(), notificationService);
     }
 
     @Test
