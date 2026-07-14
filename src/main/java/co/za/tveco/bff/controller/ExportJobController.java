@@ -1,12 +1,18 @@
 package co.za.tveco.bff.controller;
 
 import co.za.tveco.bff.dto.ApiResponse;
+import co.za.tveco.bff.dto.DocumentDownloadUrlResponse;
+import co.za.tveco.bff.dto.DocumentUploadCompleteRequest;
+import co.za.tveco.bff.dto.DocumentUploadInitRequest;
+import co.za.tveco.bff.dto.DocumentUploadInitResponse;
 import co.za.tveco.bff.dto.ExportJobCreateRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
+import co.za.tveco.bff.service.ExportJobDocumentService;
 import co.za.tveco.bff.service.ExportJobService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -27,6 +33,7 @@ import java.util.UUID;
 public class ExportJobController {
 
     private final ExportJobService exportJobService;
+    private final ExportJobDocumentService exportJobDocumentService;
 
     @GetMapping
     public ApiResponse<List<ExportJobDto>> getAll() {
@@ -62,5 +69,42 @@ public class ExportJobController {
     @GetMapping("/tracking/{token}")
     public ApiResponse<ExportJobDto> getByTrackingToken(@PathVariable String token) {
         return ApiResponse.of(exportJobService.findByTrackingToken(token));
+    }
+
+    @PostMapping("/tracking/{token}/documents/{documentId}/download-url")
+    public ApiResponse<DocumentDownloadUrlResponse> createTrackingDownloadUrl(
+            @PathVariable String token,
+            @PathVariable UUID documentId
+    ) {
+        return ApiResponse.of(exportJobDocumentService.createTrackingDownloadUrl(token, documentId));
+    }
+
+    @PostMapping("/{id}/documents/init-upload")
+    public ApiResponse<DocumentUploadInitResponse> initUpload(
+            @PathVariable UUID id,
+            @Valid @RequestBody DocumentUploadInitRequest req,
+            Authentication authentication
+    ) {
+        return ApiResponse.of(exportJobDocumentService.initAdminUpload(authentication.getName(), id, req));
+    }
+
+    @PostMapping("/{id}/documents/{documentId}/complete-upload")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void completeUpload(
+            @PathVariable UUID id,
+            @PathVariable UUID documentId,
+            @RequestBody(required = false) DocumentUploadCompleteRequest req,
+            Authentication authentication
+    ) {
+        exportJobDocumentService.completeAdminUpload(authentication.getName(), id, documentId, req == null ? new DocumentUploadCompleteRequest(null) : req);
+    }
+
+    @PostMapping("/{id}/documents/{documentId}/download-url")
+    public ApiResponse<DocumentDownloadUrlResponse> createDownloadUrl(
+            @PathVariable UUID id,
+            @PathVariable UUID documentId,
+            Authentication authentication
+    ) {
+        return ApiResponse.of(exportJobDocumentService.createAdminDownloadUrl(authentication.getName(), id, documentId));
     }
 }
