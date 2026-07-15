@@ -9,6 +9,7 @@ import co.za.tveco.bff.dto.DocumentUploadInitRequest;
 import co.za.tveco.bff.dto.DocumentUploadInitResponse;
 import co.za.tveco.bff.dto.ExportJobDto;
 import co.za.tveco.bff.dto.ExportInquiryDto;
+import co.za.tveco.bff.dto.InvoiceDto;
 import co.za.tveco.bff.dto.InquiryMessageCreateRequest;
 import co.za.tveco.bff.dto.QuoteDto;
 import co.za.tveco.bff.service.ExportJobDocumentService;
@@ -67,6 +68,11 @@ public class ClientPortalController {
     @GetMapping("/quotes")
     public ApiResponse<List<QuoteDto>> getMyQuotes(Authentication authentication) {
         return ApiResponse.of(clientPortalService.getMyQuotes(authentication.getName()));
+    }
+
+    @GetMapping("/invoices")
+    public ApiResponse<List<InvoiceDto>> getMyInvoices(Authentication authentication) {
+        return ApiResponse.of(clientPortalService.getMyInvoices(authentication.getName()));
     }
 
     @PostMapping("/quotes/{id}/decision")

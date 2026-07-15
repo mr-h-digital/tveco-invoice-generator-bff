@@ -4,6 +4,7 @@ import co.za.tveco.bff.dto.ClientExportInquiryRequest;
 import co.za.tveco.bff.dto.ClientQuoteDecisionRequest;
 import co.za.tveco.bff.dto.ExportJobDto;
 import co.za.tveco.bff.dto.ExportInquiryDto;
+import co.za.tveco.bff.dto.InvoiceDto;
 import co.za.tveco.bff.dto.InquiryMessageCreateRequest;
 import co.za.tveco.bff.dto.QuoteDto;
 import co.za.tveco.bff.entity.AppUser;
@@ -13,6 +14,7 @@ import co.za.tveco.bff.exception.ForbiddenException;
 import co.za.tveco.bff.exception.ResourceNotFoundException;
 import co.za.tveco.bff.repository.AppUserRepository;
 import co.za.tveco.bff.repository.ExportJobRepository;
+import co.za.tveco.bff.repository.InvoiceRepository;
 import co.za.tveco.bff.repository.QuoteRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,10 +50,19 @@ public class ClientPortalService {
             "PENDING_CLIENT_RESPONSE"
     );
 
+        private static final Set<String> CLIENT_VISIBLE_INVOICE_STATUSES = Set.of(
+            "SENT",
+            "PAID",
+            "OVERDUE",
+            "PARTIALLY_PAID"
+        );
+
     private final AppUserRepository appUserRepository;
     private final ExportJobRepository exportJobRepository;
+    private final InvoiceRepository invoiceRepository;
     private final QuoteRepository quoteRepository;
     private final QuoteService quoteService;
+    private final InvoiceService invoiceService;
     private final ExportInquiryService exportInquiryService;
     private final ObjectMapper objectMapper;
 
@@ -87,6 +98,18 @@ public class ClientPortalService {
                     return CLIENT_VISIBLE_QUOTE_STATUSES.contains(status);
                 })
                 .map(quoteService::toDto)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<InvoiceDto> getMyInvoices(String email) {
+        AppUser user = getClientUser(email);
+        return invoiceRepository.findByClientIdOrderByCreatedAtDesc(user.getClientId()).stream()
+                .filter(invoice -> {
+                    String status = invoice.getStatus() == null ? "" : invoice.getStatus().trim().toUpperCase(Locale.ROOT);
+                    return CLIENT_VISIBLE_INVOICE_STATUSES.contains(status);
+                })
+                .map(invoiceService::toDto)
                 .toList();
     }
 
