@@ -41,11 +41,13 @@ public class EmailRecoveryProvider implements RecoveryMessagingProvider {
                 + "Use this secure link to set a new password:\n"
                 + resetLink
                 + "\n\nThis link expires in 30 minutes. If you did not request this, you can safely ignore this email.";
+        String bodyHtml = EmailTemplates.passwordResetHtml(resetLink);
 
         emailOutboxRepository.save(EmailOutboxMessage.builder()
                 .recipient(toEmail)
                 .subject(subject)
                 .body(body)
+                .bodyHtml(bodyHtml)
                 .status("PENDING")
                 .attempts(0)
                 .build());
@@ -70,11 +72,13 @@ public class EmailRecoveryProvider implements RecoveryMessagingProvider {
         String subject = "TVECO " + ("USERNAME_RECOVERY".equals(purpose) ? "Username Recovery OTP" : "Password Reset OTP");
         String body = "Use this one-time code to continue your account recovery: " + otp + "\n\n"
                 + "This code expires in 10 minutes. Do not share this code with anyone.";
+        String bodyHtml = EmailTemplates.otpHtml(otp, purpose);
 
         emailOutboxRepository.save(EmailOutboxMessage.builder()
                 .recipient(destination)
                 .subject(subject)
                 .body(body)
+                .bodyHtml(bodyHtml)
                 .status("PENDING")
                 .attempts(0)
                 .build());
