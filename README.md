@@ -384,8 +384,15 @@ API runs at **http://localhost:8080**
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | Comma-separated list of allowed front-end origins |
 | `NOTIFICATION_WEBHOOK_URL` | _(empty)_ | Outbox dispatch webhook URL (optional) |
 | `NOTIFICATION_WEBHOOK_SECRET` | _(empty)_ | Shared secret header value for outbox webhook |
+| `R2_ENABLED` | `false` | Enable the S3-compatible document storage integration |
+| `ENDPOINT` | _(empty)_ | Railway bucket S3 endpoint |
+| `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` | _(empty)_ | Railway bucket credentials |
+| `RAILWAY_BUCKET_NAME` / `BUCKET` | _(empty)_ | Railway bucket name; `RAILWAY_BUCKET_NAME` takes precedence |
+| `REGION` | `auto` | S3-compatible bucket region |
 
 On Railway, the app now prefers `DATABASE_PUBLIC_URL` or `DATABASE_URL` when present and will normalize Railway-style `postgresql://...` URLs into a JDBC URL for Hikari/Flyway. It only falls back to `PG*` variables when no URL-style variable is available.
+
+The document-storage integration also accepts the existing `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_REGION` names. `RAILWAY_BUCKET_ID` is Railway metadata and is not used by the S3 client.
 
 ---
 
